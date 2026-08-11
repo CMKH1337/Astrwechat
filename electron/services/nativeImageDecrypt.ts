@@ -108,6 +108,17 @@ export function nativeAddonLocation(): string | null {
   return null
 }
 
+export function nativeAddonDiagnostics(): {
+  candidates: string[]
+  existing: string[]
+  loaded: boolean
+} {
+  const candidates = getAddonCandidates()
+  const existing = candidates.filter((candidate) => existsSync(candidate))
+  const loaded = loadAddon() !== null
+  return { candidates, existing, loaded }
+}
+
 export function decryptDatViaNative(
   inputPath: string,
   xorKey: number,

@@ -7,7 +7,7 @@ import { homedir, tmpdir } from 'os'
 import crypto from 'crypto'
 import { ConfigService } from './config'
 import { wcdbService } from './wcdbService'
-import { decryptDatViaNativeAsync, nativeAddonLocation } from './nativeImageDecrypt'
+import { decryptDatViaNativeAsync, nativeAddonDiagnostics, nativeAddonLocation } from './nativeImageDecrypt'
 
 // 获取 ffmpeg-static 的路径
 function getStaticFfmpegPath(): string | null {
@@ -133,6 +133,23 @@ export class ImageDecryptService {
 
   private getConfiguredMyWxid(): string {
     return String(this.runtimeConfig?.myWxid || this.configService.getMyWxidCleaned() || '').trim()
+  }
+
+  getRuntimeDiagnostics(): Record<string, unknown> {
+    const keys = this.getConfiguredImageKeys()
+    const xorText = String(keys.xorKey ?? '').trim()
+    const aesText = String(keys.aesKey || '').trim()
+    return {
+      native: nativeAddonDiagnostics(),
+      dbPath: this.getConfiguredDbPath(),
+      myWxid: this.getConfiguredMyWxid(),
+      imageXorKeyConfigured: xorText !== '',
+      imageXorKeyValueValid: xorText !== '' && !Number.isNaN(
+        xorText.toLowerCase().startsWith('0x') ? parseInt(xorText, 16) : parseInt(xorText, 10)
+      ),
+      imageAesKeyConfigured: aesText.length > 0,
+      imageAesKeyLength: aesText.length,
+    }
   }
 
   private getConfiguredImageKeys(): { xorKey: unknown; aesKey: string } {

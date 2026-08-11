@@ -1416,7 +1416,8 @@ class HttpService {
             imageDatName: msg.imageDatName,
             success: result.success,
             failureKind: result.failureKind,
-            error: result.error
+            error: result.error,
+            decryptDiagnostics: imageDecryptService.getRuntimeDiagnostics()
           })
         }
         if (!imagePath) {

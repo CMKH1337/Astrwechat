@@ -29,6 +29,37 @@ _ob_ws = None          # WebSocket 连接实例
 _ob_ws_loop = None     # 事件循环
 _ob_ws_ready = threading.Event()
 _self_id_int = 0       # 启动时从 config 初始化
+_status_callback = None
+_status_callback_lock = threading.Lock()
+
+
+def set_status_callback(callback):
+    """注册状态变化回调，由 main.py 安全地向 Electron 输出 JSON。"""
+    global _status_callback
+    with _status_callback_lock:
+        _status_callback = callback
+
+
+def notify_status():
+    """通知 Electron 刷新状态；回调异常不能影响连接线程。"""
+    with _status_callback_lock:
+        callback = _status_callback
+    if callback:
+        try:
+            callback()
+        except Exception:
+            pass
+
+
+def set_ob_connected(connected: bool):
+    """更新 AstrBot 连接状态，并仅在状态真正变化时主动上报。"""
+    previous = _ob_ws_ready.is_set()
+    if connected:
+        _ob_ws_ready.set()
+    else:
+        _ob_ws_ready.clear()
+    if previous != connected:
+        notify_status()
 
 
 def _wxid_to_int(wxid: str) -> int:

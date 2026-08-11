@@ -34,6 +34,8 @@ def _run_ob_client():
             pass
         if state._ob_ws_loop is _loop:
             state._ob_ws_loop = None
+        state._ob_ws = None
+        state.set_ob_connected(False)
 
 
 async def _ob_client_main():
@@ -50,7 +52,7 @@ async def _ob_client_main():
                 }
             ) as ws:
                 state._ob_ws = ws
-                state._ob_ws_ready.set()
+                state.set_ob_connected(True)
                 log.info(f"[OB11] ✅ 已连接到 AstrBot")
 
                 # 心跳保活：每 15 秒发 ping
@@ -85,8 +87,10 @@ async def _ob_client_main():
             log.error(f"[OB11] 连接异常: {e}")
 
         state._ob_ws = None
+        state.set_ob_connected(False)
         if not state.running:
             break
         await asyncio.sleep(5)
 
     state._ob_ws = None
+    state.set_ob_connected(False)

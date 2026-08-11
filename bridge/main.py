@@ -50,6 +50,10 @@ def emit_status():
         "ob_url": cfg.ASTRBOT_OB_URL,
     })
 
+# AstrBot WebSocket 在线/离线变化发生在 ob11-client 后台线程；
+# 通过 emit() 内部的 stdout 锁安全地实时推送给 Electron。
+state.set_status_callback(emit_status)
+
 # ============ 日志重定向到 stdout ============
 
 class _ElectronLogHandler(logging.Handler):
@@ -107,7 +111,7 @@ def _stop_bridge():
         import asyncio
         asyncio.run_coroutine_threadsafe(_ws.close(), _loop)
 
-    state._ob_ws_ready.clear()
+    state.set_ob_connected(False)
     state.ob_client_started = False
     state._ob_ws_loop = None
     emit_status()

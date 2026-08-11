@@ -126,8 +126,13 @@ class BridgeManager {
         for (const line of chunk.toString().split('\n').filter(Boolean)) {
           try {
             const msg = JSON.parse(line)
-            if (msg.type === 'status') this._status = msg.data
-            else if (msg.type === 'log') {
+            if (msg.type === 'status') {
+              this._status = msg.data
+              const liveStatus = { ...this._status, processRunning: this.isRunning() }
+              BrowserWindow.getAllWindows().forEach(w => {
+                if (!w.isDestroyed()) w.webContents.send('bridge:status', liveStatus)
+              })
+            } else if (msg.type === 'log') {
               const entry = `[${msg.data.level?.toUpperCase() || 'INFO'}] ${msg.data.msg}`
               this._logs.push(entry)
               if (this._logs.length > 500) this._logs.shift()

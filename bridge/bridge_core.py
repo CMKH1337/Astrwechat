@@ -182,8 +182,7 @@ class WeFlowBridge:
                         # 异步下载图片并在缓冲期内注入 OneBot 消息段。
                         threading.Thread(
                             target=self._inject_cached_image,
-                            args=(cached["data"].get("sessionId", session_id_data),
-                                  buffer_key, version),
+                            args=(cached["data"], buffer_key, version),
                             daemon=True,
                         ).start()
 
@@ -331,57 +330,189 @@ class WeFlowBridge:
         finally:
             self._sse_session = None
 
-    def _fetch_wechat_image(self, talker: str) -> str | None:
-        """从 WeFlow REST API 获取最新图片并保存到本地。"""
-        try:
-            url = f"{config.WE_FLOW_BASE_URL}/api/v1/messages"
+    @staticmethod
+    def _normalize_message_id(value) -> str:
+        text = str(value or "").strip()
+        if not text or text == "0":
+            return ""
+        if text.isdigit():
+            return text.lstrip("0") or "0"
+        return text
+
+    def _select_media_message(self, messages, event_data, allow_time_fallback=False):
+        """按 serverId/rawid、localId、时间邻近顺序定位本次媒体消息。"""
+        if not isinstance(messages, list):
+            return None
+
+        candidates = [
+            msg for msg in messages
+            if isinstance(msg, dict)
+            and (
+                msg.get("mediaType") in ("image", "sticker", "emoji")
+                or int(msg.get("localType") or 0) in (3, 47)
+            )
+        ]
+        if not candidates:
+            return None
+
+        target_server_id = self._normalize_message_id(
+            event_data.get("serverId") or event_data.get("rawid")
+        )
+        target_local_id = int(event_data.get("localId") or 0)
+        target_timestamp = int(event_data.get("timestamp") or 0)
+
+        if target_server_id:
+            for msg in candidates:
+                candidate_id = self._normalize_message_id(
+                    msg.get("serverId") or msg.get("serverIdRaw") or msg.get("rawid")
+                )
+                if candidate_id and candidate_id == target_server_id:
+                    return msg
+
+        if target_local_id > 0:
+            for msg in candidates:
+                if int(msg.get("localId") or 0) == target_local_id:
+                    return msg
+
+        if (target_server_id or target_local_id > 0) and not allow_time_fallback:
+            return None
+
+        if target_timestamp > 0:
+            nearby = []
+            for msg in candidates:
+                create_time = int(msg.get("createTime") or msg.get("timestamp") or 0)
+                if not create_time:
+                    continue
+                distance = abs(create_time - target_timestamp)
+                if distance <= 15:
+                    nearby.append((distance, 0 if msg.get("mediaUrl") else 1, msg))
+            if nearby:
+                nearby.sort(key=lambda item: (item[0], item[1]))
+                return nearby[0][2]
+
+        if allow_time_fallback:
+            with_url = [msg for msg in candidates if msg.get("mediaUrl")]
+            return with_url[0] if with_url else candidates[0]
+        return None
+
+    def _fetch_wechat_image(self, event_data: dict) -> str | None:
+        """精确查找本次图片；文件尚未落盘时进行有限重试。"""
+        talker = str(event_data.get("sessionId") or event_data.get("talkerId") or "").strip()
+        if not talker:
+            log.warning("图片事件缺少 sessionId/talkerId")
+            return None
+
+        target_server_id = self._normalize_message_id(
+            event_data.get("serverId") or event_data.get("rawid")
+        )
+        target_local_id = int(event_data.get("localId") or 0)
+        target_timestamp = int(event_data.get("timestamp") or 0)
+        retry_delays = (0.0, 0.45, 0.8, 1.2, 1.8)
+
+        for attempt, delay in enumerate(retry_delays, start=1):
+            if delay:
+                time.sleep(delay)
+
+            # 最后一次去掉精确 API 过滤，允许按时间邻近做兼容回退。
+            allow_time_fallback = attempt == len(retry_delays)
             params = {
                 "access_token": config.ACCESS_TOKEN,
                 "talker": talker,
                 "media": "true",
-                "limit": 3,
+                "limit": 30,
             }
-            resp = requests.get(url, params=params, timeout=10)
-            if resp.status_code != 200:
-                log.error(f"WeFlow 消息API: HTTP {resp.status_code}")
-                return None
+            if target_timestamp > 0:
+                params["start"] = max(0, target_timestamp - 20)
+                params["end"] = target_timestamp + 30
+            if not allow_time_fallback:
+                if target_server_id:
+                    params["server_id"] = target_server_id
+                if target_local_id > 0:
+                    params["local_id"] = target_local_id
 
-            data = resp.json()
-            messages = data if isinstance(data, list) else data.get("messages", data.get("data", []))
-            if not isinstance(messages, list):
-                messages = []
+            try:
+                url = f"{config.WE_FLOW_BASE_URL}/api/v1/messages"
+                resp = requests.get(url, params=params, timeout=20)
+                if resp.status_code != 200:
+                    log.warning(
+                        f"WeFlow 消息API: HTTP {resp.status_code} "
+                        f"attempt={attempt}/{len(retry_delays)}"
+                    )
+                    continue
 
-            for msg in messages:
-                if msg.get("mediaType") in ("image", "sticker", "emoji") and msg.get("mediaUrl"):
-                    media_url = msg["mediaUrl"]
-                    sep = "&" if "?" in media_url else "?"
-                    dl_url = f"{media_url}{sep}access_token={config.ACCESS_TOKEN}"
+                payload = resp.json()
+                messages = payload if isinstance(payload, list) else payload.get("messages", payload.get("data", []))
+                selected = self._select_media_message(
+                    messages,
+                    event_data,
+                    allow_time_fallback=allow_time_fallback,
+                )
+                if not selected:
+                    log.info(
+                        f"图片消息尚未出现在 API 结果中，等待重试 "
+                        f"attempt={attempt}/{len(retry_delays)} talker={talker} "
+                        f"serverId={target_server_id or '-'} localId={target_local_id or '-'}"
+                    )
+                    continue
 
-                    img_resp = requests.get(dl_url, timeout=30)
-                    if img_resp.status_code != 200:
-                        continue
+                media_url = str(selected.get("mediaUrl") or "").strip()
+                if not media_url:
+                    log.info(
+                        f"已定位图片但 mediaUrl 尚未生成，等待重试 "
+                        f"attempt={attempt}/{len(retry_delays)} talker={talker} "
+                        f"serverId={selected.get('serverId', '-')} localId={selected.get('localId', '-')}"
+                    )
+                    continue
 
-                    ct = img_resp.headers.get("Content-Type", "")
-                    ext = ".jpg"
-                    if "png" in ct: ext = ".png"
-                    elif "gif" in ct: ext = ".gif"
-                    elif "webp" in ct: ext = ".webp"
-                    filename = f"wechat_{int(time.time())}{ext}"
-                    save_dir = os.path.join(config.ASTRBOT_ATTACHMENTS, "wechat_images")
-                    os.makedirs(save_dir, exist_ok=True)
-                    save_path = os.path.join(save_dir, filename)
+                if media_url.startswith("/"):
+                    media_url = config.WE_FLOW_BASE_URL.rstrip("/") + media_url
+                sep = "&" if "?" in media_url else "?"
+                dl_url = media_url if "access_token=" in media_url else f"{media_url}{sep}access_token={config.ACCESS_TOKEN}"
+                img_resp = requests.get(dl_url, timeout=30)
+                if img_resp.status_code != 200 or not img_resp.content:
+                    log.warning(
+                        f"图片下载失败: HTTP {img_resp.status_code} "
+                        f"attempt={attempt}/{len(retry_delays)}"
+                    )
+                    continue
 
-                    with open(save_path, "wb") as f:
-                        f.write(img_resp.content)
+                content_type = str(img_resp.headers.get("Content-Type", "")).lower()
+                ext = ".jpg"
+                if "png" in content_type:
+                    ext = ".png"
+                elif "gif" in content_type:
+                    ext = ".gif"
+                elif "webp" in content_type:
+                    ext = ".webp"
 
-                    log.info(f"✅ 微信图片已保存: {save_path}")
-                    return save_path
+                identifier = target_server_id or str(target_local_id or int(time.time() * 1000))
+                safe_identifier = re.sub(r"[^a-zA-Z0-9_-]+", "_", identifier)[:80]
+                filename = f"wechat_{safe_identifier}_{int(time.time() * 1000)}{ext}"
+                base_dir = config.ASTRBOT_ATTACHMENTS or os.path.dirname(os.path.abspath(__file__))
+                save_dir = os.path.join(base_dir, "wechat_images")
+                os.makedirs(save_dir, exist_ok=True)
+                save_path = os.path.join(save_dir, filename)
 
-            log.warning(f"消息列表无图片 mediaUrl (talker={talker})")
-            return None
-        except Exception as e:
-            log.error(f"获取微信图片异常: {e}")
-            return None
+                with open(save_path, "wb") as image_file:
+                    image_file.write(img_resp.content)
+
+                log.info(
+                    f"✅ 微信图片已保存: {save_path} "
+                    f"match={'time-fallback' if allow_time_fallback else 'exact'} "
+                    f"attempt={attempt}/{len(retry_delays)}"
+                )
+                return save_path
+            except Exception as error:
+                log.warning(
+                    f"获取微信图片重试异常: {error} "
+                    f"attempt={attempt}/{len(retry_delays)} talker={talker}"
+                )
+
+        log.warning(
+            f"图片精确查询失败 (talker={talker}, serverId={target_server_id or '-'}, "
+            f"localId={target_local_id or '-'}, timestamp={target_timestamp or '-'})"
+        )
+        return None
 
     def _make_image_segment(self, image_path: str) -> dict | None:
         """将本地图片编码为 AstrBot 可接收的 OneBot 图片段。"""
@@ -404,7 +535,7 @@ class WeFlowBridge:
 
         talker_id = data.get("talkerId", "") or data.get("sessionId", "")
         is_group = bool(group_name) or "@chatroom" in session_id
-        image_path = self._fetch_wechat_image(session_id)
+        image_path = self._fetch_wechat_image(data)
         image_segment = self._make_image_segment(image_path) if image_path else None
         if image_segment:
             log.info("🖼️ 微信图片已准备为 OneBot 图片段")
@@ -437,7 +568,7 @@ class WeFlowBridge:
 
         # 下载表情包并转为图片段，失败时保留原文占位。
         try:
-            image_path = self._fetch_wechat_image(session_id)
+            image_path = self._fetch_wechat_image(data)
             image_segment = self._make_image_segment(image_path) if image_path else None
             if image_segment:
                 log.info("😀 表情包已准备为 OneBot 图片段")
@@ -453,10 +584,10 @@ class WeFlowBridge:
             self.add_text_to_buffer(talker_id, source_name, group_name,
                                     session_id, content, is_group, talker_id)
 
-    def _inject_cached_image(self, session_id, buffer_key, version):
+    def _inject_cached_image(self, image_data, buffer_key, version):
         """下载缓存图片并在缓冲计时器到期前注入 OneBot 图片段。"""
         try:
-            img_path = self._fetch_wechat_image(session_id)
+            img_path = self._fetch_wechat_image(image_data)
             image_segment = self._make_image_segment(img_path) if img_path else None
 
             with self.buffer_lock:

@@ -32,6 +32,9 @@ interface MessagePushPayload {
   sessionId: string
   sessionType: 'private' | 'group' | 'official' | 'other'
   rawid: string
+  localId?: number
+  serverId?: string
+  messageKey?: string
   avatarUrl?: string
   sourceName: string
   groupName?: string
@@ -728,6 +731,8 @@ class MessagePushService {
     const sessionType = this.getSessionType(sessionId, session)
     const content = this.getMessageDisplayContent(message)
     const rawid = this.getMessageRawId(message)
+    const localId = Number(message.localId || 0)
+    const serverId = String(message.serverIdRaw || message.serverId || '').trim()
     const appMsgKind = message.appMsgKind
     const filePath = appMsgKind === 'file'
       ? await chatService.resolveDownloadedFile(message)
@@ -745,6 +750,9 @@ class MessagePushService {
         sessionId,
         sessionType,
         rawid,
+        localId: localId || undefined,
+        serverId: serverId && serverId !== '0' ? serverId : undefined,
+        messageKey,
         avatarUrl,
         groupName,
         sourceName,
@@ -762,6 +770,9 @@ class MessagePushService {
       sessionId,
       sessionType,
       rawid,
+      localId: localId || undefined,
+      serverId: serverId && serverId !== '0' ? serverId : undefined,
+      messageKey,
       avatarUrl,
       sourceName: session.displayName || contactInfo?.displayName || sessionId,
       content,

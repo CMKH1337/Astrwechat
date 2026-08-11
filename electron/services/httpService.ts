@@ -1023,6 +1023,15 @@ class HttpService {
     const formatParam = (url.searchParams.get('format') || '').trim().toLowerCase()
     const format = formatParam || (chatlab ? 'chatlab' : 'json')
     const mediaOptions = this.parseMediaOptions(url)
+    const targetServerId = this.normalizeUnsignedIntToken(
+      url.searchParams.get('server_id') || url.searchParams.get('serverId') || url.searchParams.get('rawid')
+    )
+    const targetLocalId = this.parseIntParam(
+      url.searchParams.get('local_id') || url.searchParams.get('localId'),
+      0,
+      0,
+      Number.MAX_SAFE_INTEGER
+    )
 
     if (!talker) {
       this.sendError(res, 400, 'Missing required parameter: talker')
@@ -1086,6 +1095,19 @@ class HttpService {
       }
       messages = result.messages
       hasMore = result.hasMore === true
+    }
+
+    if (targetServerId || targetLocalId > 0) {
+      messages = messages.filter((message) => {
+        const serverMatches = targetServerId
+          ? this.getMessageServerId(message) === targetServerId
+          : false
+        const localMatches = targetLocalId > 0
+          ? Number(message.localId || 0) === targetLocalId
+          : false
+        return serverMatches || localMatches
+      })
+      hasMore = false
     }
 
     const mediaMap = mediaOptions.enabled
@@ -1515,6 +1537,8 @@ class HttpService {
       sortSeq: msg.sortSeq,
       isSend: msg.isSend,
       senderUsername: msg.senderUsername,
+      imageMd5: msg.imageMd5,
+      imageDatName: msg.imageDatName,
       content: this.getMessageContent(msg, quoteInfo),
       rawContent: msg.rawContent,
       parsedContent: msg.parsedContent,

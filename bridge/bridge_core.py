@@ -271,8 +271,8 @@ class WeFlowBridge:
             state._ob_id_to_contact[user_id] = contact
 
         sent = push_event(event)
-        if sent > 0:
-            log.info(f"✅ 已推送至 {sent} 个 AstrBot 客户端 [{contact}]")
+        if sent:
+            log.info(f"✅ 已推送至 AstrBot 客户端 [{contact}]")
         else:
             log.warning(f"⚠️ 无 AstrBot 客户端在线 [{contact}]")
 

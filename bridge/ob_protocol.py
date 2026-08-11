@@ -69,8 +69,11 @@ async def _handle_ob_api(data: dict):
             if seg_type == "text":
                 text = seg_data.get("text", "")
                 if text:
-                    await asyncio.to_thread(state.sender_instance.send_text, contact, text)
-                    log.info(f"[OB11] 文字已发送至 {contact}: {text[:50]}")
+                    sent = await asyncio.to_thread(state.sender_instance.send_text, contact, text)
+                    if sent:
+                        log.info(f"[OB11] 文字已发送至 {contact}: {text[:50]}")
+                    else:
+                        log.error(f"[OB11] 文字发送失败: {contact}: {text[:50]}")
 
             elif seg_type == "image":
                 file_val = seg_data.get("file", "")
@@ -106,8 +109,11 @@ async def _handle_ob_api(data: dict):
                 if img_path:
                     try:
                         # 使用线程池执行同步的 UIA 发送，避免阻塞事件循环
-                        await asyncio.to_thread(state.sender_instance.send_image, contact, img_path)
-                        log.info(f"[OB11] 图片已发送至 {contact}")
+                        sent = await asyncio.to_thread(state.sender_instance.send_image, contact, img_path)
+                        if sent:
+                            log.info(f"[OB11] 图片已发送至 {contact}")
+                        else:
+                            log.error(f"[OB11] 图片发送失败: {contact}")
                     finally:
                         # 临时文件用完删除
                         if img_path and "tmp" in img_path:
@@ -117,8 +123,11 @@ async def _handle_ob_api(data: dict):
                                 pass
 
             elif seg_type == "face":
-                await asyncio.to_thread(state.sender_instance.send_text, contact, "[表情]")
-                log.info(f"[OB11] 表情已发送至 {contact}")
+                sent = await asyncio.to_thread(state.sender_instance.send_text, contact, "[表情]")
+                if sent:
+                    log.info(f"[OB11] 表情已发送至 {contact}")
+                else:
+                    log.error(f"[OB11] 表情发送失败: {contact}")
 
             # 其他类型（record, video 等）忽略
 

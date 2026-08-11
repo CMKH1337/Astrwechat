@@ -19,6 +19,7 @@ uia_sender.py — 纯键盘模拟的微信消息发送器
 
 import logging
 import os
+import random
 import subprocess
 import threading
 import time
@@ -207,6 +208,7 @@ class UiaSender(BaseSender):
                 return False
 
             if not self._ensure_window():
+                log.error(f"[UIA✗] {contact}: 微信窗口不可用")
                 return False
 
             # 安全检查：过滤 PIL 引用
@@ -214,16 +216,17 @@ class UiaSender(BaseSender):
                 log.warning(f"跳过 PIL 引用消息: {text[:60]}")
                 return False
 
-            self._activate()
-            auto = self._auto
+            try:
+                self._activate()
+                auto = self._auto
 
-            # 切换到联系人
-            if self.search_enabled and contact:
-                if contact != self._last_contact:
-                    self._switch_contact(contact)
+                # 切换到联系人；失败时禁止继续向当前聊天窗口发送。
+                if self.search_enabled and contact and contact != self._last_contact:
+                    if not self._switch_contact(contact):
+                        log.error(f"[UIA✗] {contact}: 切换联系人失败")
+                        return False
                     self._last_contact = contact
 
-            try:
                 import pyperclip
 
                 # 模拟真人随机延时
@@ -273,10 +276,11 @@ class UiaSender(BaseSender):
                 self._activate()
                 auto = self._auto
 
-                if self.search_enabled and contact:
-                    if contact != self._last_contact:
-                        self._switch_contact(contact)
-                        self._last_contact = contact
+                if self.search_enabled and contact and contact != self._last_contact:
+                    if not self._switch_contact(contact):
+                        log.error(f"[UIA✗] 图片 → {contact}: 切换联系人失败")
+                        return False
+                    self._last_contact = contact
 
                 time.sleep(random.uniform(0.3, 0.8))
 

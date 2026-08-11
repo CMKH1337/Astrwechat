@@ -1,0 +1,290 @@
+{
+  "name": "astrwechat",
+  "version": "5.0.0",
+  "description": "AstrBot 微信连接器",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "postinstall": "electron-builder install-app-deps && node scripts/prepare-electron-runtime.cjs",
+    "rebuild": "electron-rebuild",
+    "dev": "node scripts/prepare-electron-runtime.cjs && node scripts/dev.cjs",
+    "typecheck": "tsc --noEmit",
+    "build": "node scripts/clean-dist-electron.cjs && tsc && vite build && electron-builder",
+    "preview": "vite preview",
+    "electron:dev": "node scripts/prepare-electron-runtime.cjs && node scripts/dev.cjs",
+    "electron:build": "npm run build",
+    "electron:run": "node scripts/run-electron.cjs",
+    "wcdb:probe": "node scripts/run-electron.cjs --build-only && node scripts/run-wcdb-probe.cjs"
+  },
+  "dependencies": {
+    "@hicccc77/electron-liquid-glass": "^0.3.0",
+    "@vscode/sudo-prompt": "^9.3.2",
+    "echarts": "^6.1.0",
+    "echarts-for-react": "^3.0.2",
+    "electron-store": "^11.0.2",
+    "electron-updater": "^6.8.9",
+    "exceljs": "^4.4.0",
+    "ffmpeg-static": "^5.3.0",
+    "fzstd": "^0.1.1",
+    "html2canvas": "^1.4.1",
+    "jieba-wasm": "^2.2.0",
+    "jszip": "^3.10.1",
+    "koffi": "^3.1.0",
+    "lucide-react": "^1.23.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.7",
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.18.1",
+    "react-virtuoso": "^4.18.10",
+    "remark-gfm": "^4.0.1",
+    "sherpa-onnx-node": "^1.13.3",
+    "silk-wasm": "^3.7.1",
+    "wechat-emojis": "^1.0.2",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.1.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^6.0.3",
+    "electron": "^43.0.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.1",
+    "sass": "^1.101.0",
+    "sharp": "^0.35.3",
+    "typescript": "^6.0.3",
+    "vite": "^8.1.3",
+    "vite-plugin-electron": "^1.1.0",
+    "vite-plugin-electron-renderer": "^1.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "tar": ">=6.2.1",
+      "minimatch": ">=3.1.2",
+      "rollup": ">=4.0.0",
+      "immutable": ">=4.0.0",
+      "lodash": ">=4.17.21",
+      "brace-expansion": ">=1.1.11",
+      "picomatch": ">=2.3.1",
+      "ajv": ">=8.18.0"
+    }
+  },
+  "build": {
+    "appId": "com.astrwechat.app",
+    "productName": "AstrWeChat",
+    "artifactName": "${productName}-${version}-Setup.${ext}",
+    "directories": {
+      "output": "release"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.utilities",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "signIgnore": [
+        ".*\\/Contents\\/Resources\\/resources\\/welive\\/macos\\/.*\\/welive$"
+      ],
+      "entitlements": "electron/entitlements.mac.plist",
+      "entitlementsInherit": "electron/entitlements.mac.plist",
+      "icon": "resources/icons/macos/icon.icns",
+      "extraResources": [
+        {
+          "from": "resources/welive/macos/${arch}",
+          "to": "resources/welive/macos/${arch}",
+          "filter": [
+            "**/*",
+            "!**/*.framework",
+            "!**/*.framework/**/*"
+          ]
+        },
+        {
+          "from": "resources/wcdb/macos/universal",
+          "to": "resources/wcdb/macos/universal"
+        },
+        {
+          "from": "resources/wedecrypt/macos/${arch}",
+          "to": "resources/wedecrypt/macos/${arch}"
+        },
+        {
+          "from": "resources/key/macos/universal",
+          "to": "resources/key/macos/universal"
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "public/icon.ico",
+      "extraFiles": [
+        {
+          "from": "resources/runtime/win32/msvcp140.dll",
+          "to": "."
+        },
+        {
+          "from": "resources/runtime/win32/msvcp140_1.dll",
+          "to": "."
+        },
+        {
+          "from": "resources/runtime/win32/vcruntime140.dll",
+          "to": "."
+        },
+        {
+          "from": "resources/runtime/win32/vcruntime140_1.dll",
+          "to": "."
+        }
+      ],
+      "extraResources": [
+        {
+          "from": "resources/welive/win32/${arch}",
+          "to": "resources/welive/win32/${arch}"
+        },
+        {
+          "from": "resources/wcdb/win32/${arch}",
+          "to": "resources/wcdb/win32/${arch}"
+        },
+        {
+          "from": "resources/wedecrypt/win32/${arch}",
+          "to": "resources/wedecrypt/win32/${arch}"
+        },
+        {
+          "from": "resources/key/win32",
+          "to": "resources/key/win32",
+          "filter": [
+            "${arch}/**/*"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "icon": "public/icon.png",
+      "target": [
+        "appimage",
+        "tar.gz"
+      ],
+      "category": "Utility",
+      "executableName": "astrwechat",
+      "synopsis": "AstrWeChat for Linux",
+      "extraFiles": [
+        {
+          "from": "resources/installer/linux/install.sh",
+          "to": "install.sh"
+        }
+      ],
+      "extraResources": [
+        {
+          "from": "resources/welive/linux/${arch}",
+          "to": "resources/welive/linux/${arch}"
+        },
+        {
+          "from": "resources/wcdb/linux/${arch}",
+          "to": "resources/wcdb/linux/${arch}"
+        },
+        {
+          "from": "resources/wedecrypt/linux/${arch}",
+          "to": "resources/wedecrypt/linux/${arch}"
+        },
+        {
+          "from": "resources/key/linux",
+          "to": "resources/key/linux",
+          "filter": [
+            "${arch}/**/*"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "differentialPackage": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "unicode": true,
+      "installerLanguages": [
+        "zh_CN",
+        "en_US"
+      ],
+      "language": "2052",
+      "displayLanguageSelector": false,
+      "include": "installer.nsh",
+      "installerIcon": "public/icon.ico",
+      "uninstallerIcon": "public/icon.ico",
+      "installerHeaderIcon": "public/icon.ico",
+      "perMachine": false,
+      "allowElevation": true,
+      "installerSidebar": null,
+      "uninstallerSidebar": null
+    },
+    "extraResources": [
+      {
+        "from": "bridge",
+        "to": "bridge",
+        "filter": [
+          "**/*",
+          "!bridge.log",
+          "!__pycache__/**/*"
+        ]
+      },
+      {
+        "from": "resources/",
+        "to": "resources/",
+        "filter": [
+          "**/*",
+          "!welive/**/*",
+          "!wcdb/**/*",
+          "!wedecrypt/**/*",
+          "!key/**/*"
+        ]
+      },
+      {
+        "from": "public/icon.ico",
+        "to": "icon.ico"
+      },
+      {
+        "from": "public/icon.png",
+        "to": "icon.png"
+      },
+      {
+        "from": "resources/icons/macos/icon.icns",
+        "to": "icon.icns"
+      },
+      {
+        "from": "electron/assets/wasm/",
+        "to": "assets/wasm/"
+      }
+    ],
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "afterPack": "scripts/after-pack.cjs",
+    "asarUnpack": [
+      "node_modules/silk-wasm/**/*",
+      "node_modules/sherpa-onnx-node/**/*",
+      "node_modules/sherpa-onnx-*/*",
+      "node_modules/sherpa-onnx-*/**/*",
+      "node_modules/ffmpeg-static/**/*",
+      "node_modules/@hicccc77/electron-liquid-glass/**/*",
+      "resources/wedecrypt/**/*.node"
+    ],
+    "icon": "resources/icons/macos/icon.icns"
+  },
+  "overrides": {
+    "brace-expansion": {
+      ".": "^5.0.6"
+    },
+    "node-abi": ">=4.33.0",
+    "exceljs": {
+      "uuid": "11.1.1"
+    },
+    "fast-uri": "^3.1.3",
+    "form-data": "^4.0.6",
+    "ip-address": "^10.2.0",
+    "picomatch": "^4.0.4",
+    "js-yaml": "^4.3.0",
+    "tar": "^7.5.19",
+    "tmp": "^0.2.7",
+    "immutable": "^5.1.5"
+  }
+}

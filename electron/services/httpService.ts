@@ -1396,12 +1396,29 @@ class HttpService {
           createTime: msg.createTime,
           force: true,
           preferFilePath: true,
-          hardlinkOnly: true,
+          // 图片推送只处理已经精确定位的一条消息；允许完整缓存索引和文件扫描，
+          // 不要只依赖已建立的 hardlink，否则新收到的图片容易拿不到 mediaUrl。
+          hardlinkOnly: false,
+          allowCacheIndex: true,
+          allowCachePromotion: true,
+          allowFilesystemScan: true,
           disableUpdateCheck: true,
           suppressEvents: true
         })
 
         let imagePath = result.success ? result.localPath : undefined
+        if (!imagePath) {
+          console.warn('[HttpService] image push export miss', {
+            talker,
+            localId: msg.localId,
+            createTime: msg.createTime,
+            imageMd5: msg.imageMd5,
+            imageDatName: msg.imageDatName,
+            success: result.success,
+            failureKind: result.failureKind,
+            error: result.error
+          })
+        }
         if (!imagePath) {
           try {
             const cached = await imageDecryptService.resolveCachedImage({
@@ -1410,7 +1427,10 @@ class HttpService {
               imageDatName: msg.imageDatName,
               createTime: msg.createTime,
               preferFilePath: true,
-              hardlinkOnly: true,
+              hardlinkOnly: false,
+              allowCacheIndex: true,
+              allowCachePromotion: true,
+              allowFilesystemScan: true,
               disableUpdateCheck: true,
               suppressEvents: true
             })

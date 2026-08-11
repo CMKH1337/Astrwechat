@@ -14,6 +14,8 @@ export default function ConnectPage({ onConnected }: Props) {
   const [autoDetecting, setAutoDetecting] = useState(false)
   const [keyFetching, setKeyFetching] = useState(false)
   const [keyProgress, setKeyProgress] = useState('')
+  const [imageKeyFetching, setImageKeyFetching] = useState(false)
+  const [imageKeyProgress, setImageKeyProgress] = useState('')
   const connectingRef = useRef(false)
 
   // 启动时读取已保存的配置
@@ -118,6 +120,97 @@ export default function ConnectPage({ onConnected }: Props) {
     }
   }
 
+  const saveImageKeys = async (result: { xorKey?: number; aesKey?: string }) => {
+    if (typeof result.xorKey !== 'number' || !result.aesKey) {
+      throw new Error('没有获取到完整的图片 XOR/AES 密钥')
+    }
+
+    await window.electronAPI.config.set('imageXorKey', result.xorKey)
+    await window.electronAPI.config.set('imageAesKey', result.aesKey)
+
+    const currentWxid = wxid.trim()
+    if (currentWxid) {
+      const existing = await window.electronAPI.config.get('wxidConfigs')
+      const configs = existing && typeof existing === 'object' && !Array.isArray(existing)
+        ? { ...(existing as Record<string, unknown>) }
+        : {}
+      const current = configs[currentWxid]
+      configs[currentWxid] = {
+        ...(current && typeof current === 'object' ? current : {}),
+        imageXorKey: result.xorKey,
+        imageAesKey: result.aesKey,
+        updatedAt: Date.now(),
+      }
+      await window.electronAPI.config.set('wxidConfigs', configs)
+    }
+  }
+
+  const handleAutoGetImageKey = async () => {
+    if (!dbPath.trim() || !wxid.trim()) {
+      setStatus('err')
+      setStatusMsg('请先填写或自动检测微信数据目录和微信 ID')
+      return
+    }
+
+    setImageKeyFetching(true)
+    setImageKeyProgress('正在扫描图片缓存...')
+    const removeStatusListener = window.electronAPI.key.onImageKeyStatus((payload) => {
+      setImageKeyProgress(payload.message)
+    })
+
+    try {
+      const result = await window.electronAPI.key.autoGetImageKey(dbPath.trim(), wxid.trim())
+      if (!result.success || typeof result.xorKey !== 'number' || !result.aesKey) {
+        setStatus('err')
+        setStatusMsg(result.error || '未能获取完整的图片密钥')
+        return
+      }
+      await saveImageKeys(result)
+      setStatus('ok')
+      setStatusMsg('图片密钥获取成功，已保存到当前微信账号')
+    } catch (e) {
+      setStatus('err')
+      setStatusMsg('获取图片密钥失败：' + String(e))
+    } finally {
+      removeStatusListener()
+      setImageKeyFetching(false)
+      setImageKeyProgress('')
+    }
+  }
+
+  const handleScanImageKeyMemory = async () => {
+    if (!dbPath.trim() || !wxid.trim()) {
+      setStatus('err')
+      setStatusMsg('请先填写或自动检测微信数据目录和微信 ID')
+      return
+    }
+
+    setImageKeyFetching(true)
+    setImageKeyProgress('请先在微信中打开 2～3 张图片大图，正在扫描微信进程内存...')
+    const removeStatusListener = window.electronAPI.key.onImageKeyStatus((payload) => {
+      setImageKeyProgress(payload.message)
+    })
+
+    try {
+      const result = await window.electronAPI.key.scanImageKeyFromMemory(dbPath.trim())
+      if (!result.success || typeof result.xorKey !== 'number' || !result.aesKey) {
+        setStatus('err')
+        setStatusMsg(result.error || '内存扫描未找到图片 AES 密钥')
+        return
+      }
+      await saveImageKeys(result)
+      setStatus('ok')
+      setStatusMsg('图片 AES 密钥获取成功，已保存到当前微信账号')
+    } catch (e) {
+      setStatus('err')
+      setStatusMsg('内存扫描失败：' + String(e))
+    } finally {
+      removeStatusListener()
+      setImageKeyFetching(false)
+      setImageKeyProgress('')
+    }
+  }
+
   const handleBrowse = async () => {
     const result = await window.electronAPI.dialog.openDirectory({ title: '选择微信数据目录' })
     if (result?.filePaths?.[0]) setDbPath(result.filePaths[0])
@@ -164,6 +257,28 @@ export default function ConnectPage({ onConnected }: Props) {
           </button>
         </div>
         {keyFetching && <div className="slim-field__hint">{keyProgress}</div>}
+
+        <div className="slim-field">
+          <label>图片密钥</label>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              className="slim-btn slim-btn--secondary"
+              onClick={handleAutoGetImageKey}
+              disabled={imageKeyFetching}
+            >
+              {imageKeyFetching ? '获取中...' : '自动获取图片密钥'}
+            </button>
+            <button
+              className="slim-btn slim-btn--secondary"
+              onClick={handleScanImageKeyMemory}
+              disabled={imageKeyFetching}
+            >
+              内存扫描 AES
+            </button>
+          </div>
+        </div>
+        {imageKeyFetching && <div className="slim-field__hint">{imageKeyProgress}</div>}
+        <div className="slim-field__hint">图片密钥独立于数据库密钥；内存扫描前请在微信中打开 2～3 张图片大图。</div>
 
         <div className="slim-field">
           <label>微信 ID</label>

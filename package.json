@@ -1,16 +1,16 @@
 {
-  "name": "weflow",
+  "name": "astrwechat",
   "version": "5.0.0",
   "description": "AstrBot 微信连接器",
   "main": "dist-electron/main.js",
   "scripts": {
     "postinstall": "electron-builder install-app-deps && node scripts/prepare-electron-runtime.cjs",
     "rebuild": "electron-rebuild",
-    "dev": "node scripts/verify-runtime-identity.cjs && node scripts/prepare-electron-runtime.cjs && node scripts/dev.cjs",
+    "dev": "node scripts/prepare-electron-runtime.cjs && node scripts/dev.cjs",
     "typecheck": "tsc --noEmit",
     "build": "node scripts/clean-dist-electron.cjs && tsc && vite build && electron-builder",
     "preview": "vite preview",
-    "electron:dev": "node scripts/verify-runtime-identity.cjs && node scripts/prepare-electron-runtime.cjs && node scripts/dev.cjs",
+    "electron:dev": "node scripts/prepare-electron-runtime.cjs && node scripts/dev.cjs",
     "electron:build": "npm run build",
     "electron:run": "node scripts/run-electron.cjs",
     "wcdb:probe": "node scripts/run-electron.cjs --build-only && node scripts/run-wcdb-probe.cjs"

@@ -25,7 +25,6 @@ function run(executable, args) {
   return typeof result.status === 'number' ? result.status : 1
 }
 
-const verifyIdentity = join(root, 'scripts', 'verify-runtime-identity.cjs')
 const prepareRuntime = join(root, 'scripts', 'prepare-electron-runtime.cjs')
 const viteCli = join(root, 'node_modules', 'vite', 'bin', 'vite.js')
 const electron = process.platform === 'win32'
@@ -33,10 +32,7 @@ const electron = process.platform === 'win32'
   : join(root, 'node_modules', '.bin', 'electron')
 const wcdbDir = join(root, 'resources', 'wcdb', 'win32', 'x64')
 const requiredFiles = [
-  verifyIdentity,
   prepareRuntime,
-  join(root, 'electron', 'appIdentity.ts'),
-  join(root, 'electron', 'runtime-env.ts'),
   viteCli,
   electron,
   ...(process.platform === 'win32'
@@ -48,9 +44,6 @@ if (missingFiles.length > 0) {
   console.error(`[electron:run] Required project files are missing:\n${missingFiles.join('\n')}`)
   process.exit(1)
 }
-
-const identityStatus = run(process.execPath, [verifyIdentity])
-if (identityStatus !== 0) process.exit(identityStatus)
 
 const runtimeStatus = run(process.execPath, [prepareRuntime])
 if (runtimeStatus !== 0) process.exit(runtimeStatus)

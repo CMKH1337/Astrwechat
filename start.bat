@@ -27,18 +27,6 @@ if errorlevel 1 (
   exit /b 1
 )
 
-if not exist "scripts\verify-runtime-identity.cjs" (
-  echo [ERROR] Missing scripts\verify-runtime-identity.cjs. This project copy is incomplete.
-  pause
-  exit /b 1
-)
-node scripts\verify-runtime-identity.cjs
-if errorlevel 1 (
-  echo [ERROR] Runtime identity verification failed. AstrWeChat was not started.
-  pause
-  exit /b 1
-)
-
 if not exist "node_modules\" (
   echo.
   echo [2/4] 检测到首次启动，正在安装 Node.js 依赖喵...

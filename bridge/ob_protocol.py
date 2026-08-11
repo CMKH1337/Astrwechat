@@ -24,19 +24,48 @@ import config
 log = logging.getLogger("ob11-bridge")
 
 
-async def _handle_ob_api(data: dict):
-    """处理 AstrBot 发来的 API 请求。"""
-    action = data.get("action", "")
-    params = data.get("params", {})
-    echo = data.get("echo", "")
-    log.info(f"[OB11] API: {action} echo={echo}")
+_send_queue = None
+_send_worker_task = None
+_send_worker_loop = None
 
-    # 先回响应（必须在处理消息前回，否则 AstrBot 超时）
+
+def _ensure_send_queue():
+    """为当前 WebSocket 事件循环创建唯一的 FIFO 发送队列。"""
+    global _send_queue, _send_worker_task, _send_worker_loop
+    loop = asyncio.get_running_loop()
+    if (
+        _send_queue is None
+        or _send_worker_loop is not loop
+        or _send_worker_task is None
+        or _send_worker_task.done()
+    ):
+        _send_queue = asyncio.Queue()
+        _send_worker_loop = loop
+        _send_worker_task = asyncio.create_task(_send_worker(_send_queue))
+    return _send_queue
+
+
+async def _send_worker(queue: asyncio.Queue):
+    """严格按 AstrBot API 到达顺序执行微信 UIA 发送。"""
+    while True:
+        request = await queue.get()
+        try:
+            await _process_send_request(request)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.exception(f"[OB11] 发送队列处理异常: {e}")
+        finally:
+            queue.task_done()
+
+
+async def _send_ob_response(action: str, echo):
+    """尽快回复 OneBot API，避免 AstrBot 在等待 UIA 时超时。"""
     resp_sent = False
     resp_data = {"status": "ok", "retcode": 0, "data": {}}
-    if echo:
+    if echo is not None:
         resp_data["echo"] = echo
-    # 如果 WS 暂时断连，等一会重试
+
     for retry in range(10):
         try:
             if state._ob_ws:
@@ -47,94 +76,161 @@ async def _handle_ob_api(data: dict):
             if retry < 9:
                 await asyncio.sleep(0.5)
         except Exception as e:
-            log.warning(f"[OB11] 回响应失败 (重试 {retry}/10): {e}")
+            log.warning(f"[OB11] 回响应失败 (重试 {retry + 1}/10): {e}")
             if retry < 9:
                 await asyncio.sleep(0.5)
+
     if not resp_sent:
-        log.warning(f"[OB11] 无法回响应（WS 未连接），消息仍尝试本地处理: {action}")
+        log.warning(f"[OB11] 无法回响应（WS 未连接），消息仍尝试本地排队: {action}")
+
+
+def _coalesce_message_operations(message) -> list[tuple[str, str]]:
+    """
+    将一次 OneBot send_* 请求合并为有序操作。
+
+    OneBot 的多个 text segment 本来属于同一条消息，不应逐段抢占 UIA 锁；
+    at segment 暂不转成微信原生 @，但也不能把相邻文本拆开。
+    """
+    if isinstance(message, str):
+        message = [{"type": "text", "data": {"text": message}}]
+    elif isinstance(message, dict):
+        message = [message]
+    elif not isinstance(message, list):
+        return []
+
+    operations: list[tuple[str, str]] = []
+    text_parts: list[str] = []
+
+    def flush_text():
+        if not text_parts:
+            return
+        text = "".join(text_parts).strip()
+        text_parts.clear()
+        if text:
+            operations.append(("text", text))
+
+    for seg in message:
+        if not isinstance(seg, dict):
+            continue
+        seg_type = str(seg.get("type", ""))
+        seg_data = seg.get("data", {}) or {}
+
+        if seg_type == "text":
+            text_parts.append(str(seg_data.get("text", "")))
+        elif seg_type == "image":
+            flush_text()
+            file_val = str(seg_data.get("file", "")).strip()
+            if file_val:
+                operations.append(("image", file_val))
+        elif seg_type == "face":
+            flush_text()
+            operations.append(("text", "[表情]"))
+        elif seg_type == "at":
+            # 微信原生 @ 需要单独的 UIA 选人流程；当前保持既有行为：
+            # 忽略 OneBot at 元数据，但继续合并其前后的文本。
+            continue
+
+    flush_text()
+    return operations
+
+
+async def _send_image_operation(contact: str, file_val: str) -> bool:
+    img_path = None
+    temporary_file = False
+
+    if file_val.startswith("base64://"):
+        try:
+            img_path = await asyncio.to_thread(_decode_base64_image, file_val[9:])
+            temporary_file = bool(img_path)
+            if img_path:
+                log.info(f"[OB11] 图片已解码: {os.path.basename(img_path)}")
+        except Exception as e:
+            log.warning(f"[OB11] base64 图片解码失败: {e}")
+            return False
+    elif config.ASTRBOT_ATTACHMENTS:
+        candidates = [
+            os.path.join(config.ASTRBOT_ATTACHMENTS, file_val),
+            os.path.join(config.ASTRBOT_ATTACHMENTS, "wechat_images", file_val),
+        ]
+        for candidate in candidates:
+            if os.path.exists(candidate):
+                img_path = candidate
+                break
+        if not img_path:
+            log.warning(f"[OB11] 图片文件未找到: {file_val}")
+
+    if not img_path:
+        return False
+
+    try:
+        sent = await asyncio.to_thread(state.sender_instance.send_image, contact, img_path)
+        if sent:
+            log.info(f"[OB11] 图片已发送至 {contact}")
+        else:
+            log.error(f"[OB11] 图片发送失败: {contact}")
+        return bool(sent)
+    finally:
+        if temporary_file:
+            try:
+                os.unlink(img_path)
+            except Exception:
+                pass
+
+
+async def _process_send_request(request: dict):
+    """处理一整个 send_* 请求；同一请求的消息段不会和其他请求交错。"""
+    action = request["action"]
+    params = request["params"]
+    contact = request["contact"]
+    echo = request.get("echo")
+    operations = _coalesce_message_operations(params.get("message", []))
+
+    log.info(
+        f"[OB11] 开始顺序发送: {action} echo={echo} "
+        f"contact={contact} operations={len(operations)}"
+    )
+
+    if not operations:
+        log.info(f"[OB11] 跳过空消息: {action} echo={echo} contact={contact}")
+        return
+
+    for operation_type, value in operations:
+        if operation_type == "text":
+            sent = await asyncio.to_thread(state.sender_instance.send_text, contact, value)
+            if sent:
+                log.info(f"[OB11] 文字已发送至 {contact}: {value[:50]}")
+            else:
+                log.error(f"[OB11] 文字发送失败: {contact}: {value[:50]}")
+        elif operation_type == "image":
+            await _send_image_operation(contact, value)
+
+
+async def _handle_ob_api(data: dict):
+    """响应 OneBot API；发送类请求进入 FIFO 队列后立即返回。"""
+    action = str(data.get("action", ""))
+    params = data.get("params", {}) or {}
+    echo = data.get("echo") if "echo" in data else None
+    log.info(f"[OB11] API: {action} echo={echo}")
+
+    await _send_ob_response(action, echo)
 
     if action in ("send_msg", "send_private_msg", "send_group_msg"):
         is_group = action == "send_group_msg"
         target_id = params.get("group_id" if is_group else "user_id", 0)
-        message = params.get("message", [])
         contact = state._ob_id_to_contact.get(target_id, str(target_id))
-
-        # 逐段处理：文字和图片分别发送
-        for seg in message:
-            if not isinstance(seg, dict):
-                continue
-            seg_type = seg.get("type", "")
-            seg_data = seg.get("data", {})
-
-            if seg_type == "text":
-                text = seg_data.get("text", "")
-                if text:
-                    sent = await asyncio.to_thread(state.sender_instance.send_text, contact, text)
-                    if sent:
-                        log.info(f"[OB11] 文字已发送至 {contact}: {text[:50]}")
-                    else:
-                        log.error(f"[OB11] 文字发送失败: {contact}: {text[:50]}")
-
-            elif seg_type == "image":
-                file_val = seg_data.get("file", "")
-                if not file_val:
-                    continue
-
-                img_path = None
-
-                # AstrBot 通过 aiocqhttp 发图片时用 base64:// 格式
-                if file_val.startswith("base64://"):
-                    try:
-                        # 解码 + 写文件在线程池执行，避免大图卡死事件循环
-                        b64_data = file_val[9:]
-                        img_path = await asyncio.to_thread(_decode_base64_image, b64_data)
-                        if img_path:
-                            log.info(f"[OB11] 图片已解码: {os.path.basename(img_path)}")
-                    except Exception as e:
-                        log.warning(f"[OB11] base64 图片解码失败: {e}")
-                else:
-                    # 文件名模式：在附件目录找
-                    if config.ASTRBOT_ATTACHMENTS:
-                        candidates = [
-                            os.path.join(config.ASTRBOT_ATTACHMENTS, file_val),
-                            os.path.join(config.ASTRBOT_ATTACHMENTS, "wechat_images", file_val),
-                        ]
-                        for p in candidates:
-                            if os.path.exists(p):
-                                img_path = p
-                                break
-                        if not img_path:
-                            log.warning(f"[OB11] 图片文件未找到: {file_val}")
-
-                if img_path:
-                    try:
-                        # 使用线程池执行同步的 UIA 发送，避免阻塞事件循环
-                        sent = await asyncio.to_thread(state.sender_instance.send_image, contact, img_path)
-                        if sent:
-                            log.info(f"[OB11] 图片已发送至 {contact}")
-                        else:
-                            log.error(f"[OB11] 图片发送失败: {contact}")
-                    finally:
-                        # 临时文件用完删除
-                        if img_path and "tmp" in img_path:
-                            try:
-                                os.unlink(img_path)
-                            except Exception:
-                                pass
-
-            elif seg_type == "face":
-                sent = await asyncio.to_thread(state.sender_instance.send_text, contact, "[表情]")
-                if sent:
-                    log.info(f"[OB11] 表情已发送至 {contact}")
-                else:
-                    log.error(f"[OB11] 表情发送失败: {contact}")
-
-            # 其他类型（record, video 等）忽略
-
+        queue = _ensure_send_queue()
+        await queue.put({
+            "action": action,
+            "params": params,
+            "echo": echo,
+            "contact": contact,
+        })
+        log.info(
+            f"[OB11] 已进入发送队列: {action} echo={echo} "
+            f"contact={contact} pending={queue.qsize()}"
+        )
     else:
         log.debug(f"[OB11] 未处理 API: {action}")
-
-    # 注意：API 响应已在函数开头统一发送，此处不再重复
 
 
 def _extract_text(message: list) -> str:

@@ -67,8 +67,9 @@ async def _ob_client_main():
                     async for raw in ws:
                         try:
                             data = json.loads(raw)
-                            # 用 create_task 异步处理，不阻塞消息循环
-                            asyncio.create_task(_handle_ob_api(data))
+                            # _handle_ob_api 只负责立即回响应并按接收顺序入队，
+                            # 不等待 UIA 真正发送，因此这里可以顺序 await，保证 FIFO。
+                            await _handle_ob_api(data)
                         except json.JSONDecodeError:
                             log.warning(f"[OB11] 收到无效 JSON")
                         except Exception as e:

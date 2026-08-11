@@ -3312,8 +3312,8 @@ const shutdownAppServices = async (): Promise<void> => {
       app.exit(0)
     }, 5000)
     forceExitTimer.unref()
-    // 停止 bridge 子进程
-    try { bridgeManager.stop() } catch {}
+    // 先等待 Bridge 子进程退出；正常退出最多等待 3 秒，超时会强制终止。
+    try { await bridgeManager.stop() } catch {}
     // 停止 chatService（内部会关闭 cursor 与 DB），避免退出阶段仍触发监控回调
     try { chatService.close() } catch {}
     // 停止 HTTP 服务器，释放 TCP 端口占用，避免进程无法退出

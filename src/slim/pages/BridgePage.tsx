@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import '../AppSlim.scss'
+import bridgeDefaultConfig from '../../../shared/bridge-default-config.json'
 
 interface BridgeStatus {
   running: boolean
@@ -21,16 +22,7 @@ interface BridgeConfig {
   astrbot_attachments: string
 }
 
-const DEFAULT_CONFIG: BridgeConfig = {
-  weflow_base_url: 'http://127.0.0.1:5031',
-  access_token: '',
-  astrbot_ob_url: 'ws://127.0.0.1:11229/ws',
-  bot_nicknames: [],
-  bot_wxid: '',
-  buffer_seconds: 0,
-  group_reply_mode: 'mention',
-  astrbot_attachments: '',
-}
+const DEFAULT_CONFIG: BridgeConfig = { ...bridgeDefaultConfig }
 
 export default function BridgePage() {
   const [status, setStatus] = useState<BridgeStatus>({ running: false, paused: false, ob_connected: false, processRunning: false })

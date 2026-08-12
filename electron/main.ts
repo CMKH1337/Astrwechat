@@ -7,8 +7,9 @@ import { randomUUID } from 'crypto'
 import { join, dirname } from 'path'
 import { autoUpdater } from 'electron-updater'
 import { readFile, writeFile, appendFile, mkdir, rm, readdir } from 'fs/promises'
-import { existsSync } from 'fs'
+import { existsSync, mkdirSync, writeFileSync } from 'fs'
 import packageMetadata from '../package.json'
+import bridgeDefaultConfig from '../shared/bridge-default-config.json'
 import { ConfigService } from './services/config'
 import { resolveAppIconPath } from './appIcon'
 import { dbPathService } from './services/dbPathService'
@@ -82,6 +83,15 @@ class BridgeManager {
 
   get status() { return this._status }
   get logs() { return this._logs }
+  ensureConfigFile(): string {
+    const dir = this.getBridgeDir()
+    const configPath = join(dir, 'config.json')
+    if (!existsSync(configPath)) {
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(configPath, JSON.stringify(bridgeDefaultConfig, null, 4), 'utf8')
+    }
+    return configPath
+  }
 
   getBridgeDir() {
     const candidates = [
@@ -110,6 +120,7 @@ class BridgeManager {
   start() {
     if (this.proc) return { success: false, error: '进程已在运行' }
     const dir = this.getBridgeDir()
+    this.ensureConfigFile()
     const entry = join(dir, 'main.py')
     if (!existsSync(entry)) {
       return { success: false, error: `Bridge 程序文件不存在: ${entry}` }
@@ -1832,6 +1843,20 @@ function registerIpcHandlers() {
       errors.push(`清空配置失败：${String(error)}`)
     }
 
+    // Bridge keeps its settings in a separate JSON file, outside Electron Store.
+    try {
+      const bridgeDir = bridgeManager.getBridgeDir()
+      const bridgeConfigPath = join(bridgeDir, 'config.json')
+      await mkdir(bridgeDir, { recursive: true })
+      await writeFile(
+        bridgeConfigPath,
+        JSON.stringify(bridgeDefaultConfig, null, 4),
+        'utf8'
+      )
+    } catch (error) {
+      errors.push(`Bridge configuration reset failed: ${String(error)}`)
+    }
+
     messagePushService.handleConfigCleared()
 
     try {
@@ -3052,8 +3077,7 @@ function registerIpcHandlers() {
   })
 
   ipcMain.handle('bridge:getConfig', async () => {
-    const dir = bridgeManager.getBridgeDir()
-    const cfgPath = join(dir, 'config.json')
+    const cfgPath = bridgeManager.ensureConfigFile()
     try {
       const raw = await readFile(cfgPath, 'utf8')
       return { success: true, config: JSON.parse(raw) }

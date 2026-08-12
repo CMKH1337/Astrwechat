@@ -222,6 +222,7 @@
         "to": "bridge",
         "filter": [
           "**/*",
+          "!config.json",
           "!bridge.log",
           "!__pycache__/**/*"
         ]
@@ -268,7 +269,8 @@
       "node_modules/@hicccc77/electron-liquid-glass/**/*",
       "resources/wedecrypt/**/*.node"
     ],
-    "icon": "resources/icons/macos/icon.icns"
+    "icon": "resources/icons/macos/icon.icns",
+    "executableName": "WeFlow"
   },
   "overrides": {
     "brace-expansion": {

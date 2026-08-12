@@ -6,6 +6,7 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import { createHash } from 'crypto'
 import { pathToFileURL } from 'url'
+import { FILE_APP_LOCAL_TYPE_SET } from './export/constants'
 
 interface SessionBaseline {
   lastTimestamp: number
@@ -32,14 +33,19 @@ interface MessagePushPayload {
   sessionId: string
   sessionType: 'private' | 'group' | 'official' | 'other'
   rawid: string
+  localType?: number
   localId?: number
   serverId?: string
   messageKey?: string
   avatarUrl?: string
   sourceName: string
+  senderUsername?: string
   groupName?: string
   content: string | null
   appMsgKind?: string
+  fileName?: string
+  fileSize?: number
+  fileMd5?: string
   filePath?: string
   timestamp: number
 }
@@ -722,6 +728,14 @@ class MessagePushService {
     return merged
   }
 
+  private inferPlainAttachmentFileName(content: string | null, localType: number): string | undefined {
+    if (localType !== 49) return undefined
+    const text = String(content || '').replace(/^\[文件\]\s*/u, '').trim()
+    if (!text || text.includes('\n') || text.includes('\r')) return undefined
+    const fileNamePattern = /^[^\\/:*?"<>|]{1,240}\.(?:txt|md|markdown|log|csv|tsv|json|jsonl|xml|yaml|yml|ini|conf|cfg|pdf|doc|docx|xls|xlsx|ppt|pptx|wps|et|dps|rtf|zip|rar|7z|tar|gz|bz2|xz|apk|exe|msi|dmg|pkg|py|js|jsx|ts|tsx|java|kt|kts|c|cc|cpp|cxx|h|hpp|go|rs|php|rb|sh|bat|cmd|ps1|sql|html|htm|css|scss|less)$/iu
+    return fileNamePattern.test(text) ? text : undefined
+  }
+
   private async buildPayload(session: ChatSession, message: Message): Promise<MessagePushPayload | null> {
     const sessionId = String(session.username || '').trim()
     const messageKey = String(message.messageKey || '').trim()
@@ -733,10 +747,34 @@ class MessagePushService {
     const rawid = this.getMessageRawId(message)
     const localId = Number(message.localId || 0)
     const serverId = String(message.serverIdRaw || message.serverId || '').trim()
-    const appMsgKind = message.appMsgKind
-    const filePath = appMsgKind === 'file'
-      ? await chatService.resolveDownloadedFile(message)
+    const localType = Number(message.localType || 0)
+    const inferredFileName = message.fileName
+      || this.inferPlainAttachmentFileName(content, localType)
+    const isKnownFileLocalType = FILE_APP_LOCAL_TYPE_SET.has(localType) && localType !== 49
+    const isFileMessage = message.appMsgKind === 'file'
+      || message.xmlType === '6'
+      || isKnownFileLocalType
+      || Boolean(inferredFileName && FILE_APP_LOCAL_TYPE_SET.has(localType))
+    const appMsgKind = isFileMessage ? 'file' : message.appMsgKind
+    const fileMessage = inferredFileName && !message.fileName
+      ? { ...message, fileName: inferredFileName }
+      : message
+    const filePath = isFileMessage
+      ? await chatService.resolveDownloadedFile(fileMessage)
       : undefined
+
+    if (isFileMessage) {
+      console.info('[MessagePush] file event', {
+        sessionId,
+        localType,
+        localId,
+        serverId,
+        appMsgKind: message.appMsgKind,
+        xmlType: message.xmlType,
+        fileName: inferredFileName,
+        filePath: filePath || ''
+      })
+    }
 
     const createTime = Number(message.createTime || 0)
 
@@ -750,14 +788,19 @@ class MessagePushService {
         sessionId,
         sessionType,
         rawid,
+        localType: localType || undefined,
         localId: localId || undefined,
         serverId: serverId && serverId !== '0' ? serverId : undefined,
         messageKey,
         avatarUrl,
         groupName,
         sourceName,
+        senderUsername: message.senderUsername || undefined,
         content,
         appMsgKind,
+        fileName: inferredFileName,
+        fileSize: message.fileSize,
+        fileMd5: message.fileMd5,
         filePath: filePath || undefined,
         timestamp: createTime
       }
@@ -770,13 +813,18 @@ class MessagePushService {
       sessionId,
       sessionType,
       rawid,
+      localType: localType || undefined,
       localId: localId || undefined,
       serverId: serverId && serverId !== '0' ? serverId : undefined,
       messageKey,
       avatarUrl,
       sourceName: session.displayName || contactInfo?.displayName || sessionId,
+      senderUsername: message.senderUsername || undefined,
       content,
       appMsgKind,
+      fileName: inferredFileName,
+      fileSize: message.fileSize,
+      fileMd5: message.fileMd5,
       filePath: filePath || undefined,
       timestamp: createTime
     }

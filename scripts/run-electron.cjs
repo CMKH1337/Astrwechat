@@ -51,4 +51,6 @@ if (runtimeStatus !== 0) process.exit(runtimeStatus)
 const buildStatus = run(process.execPath, [viteCli, 'build'])
 if (buildStatus !== 0) process.exit(buildStatus)
 if (process.argv.includes('--build-only')) process.exit(0)
-process.exit(run(electron, ['dist-electron/main.js']))
+// Launch the project root so Electron reads package.json and uses the app's
+// name/version metadata instead of treating the Electron runtime as the app.
+process.exit(run(electron, ['.']))

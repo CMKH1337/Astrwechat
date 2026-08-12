@@ -5714,6 +5714,30 @@ class ChatService {
         if (!quotedSender && type49Info.quotedSender !== undefined) quotedSender = type49Info.quotedSender
       }
 
+      const inferredPlainFileName = !fileName
+        ? this.inferPlainAttachmentFileName(content, localType)
+        : undefined
+      if (inferredPlainFileName) {
+        fileName = inferredPlainFileName
+        linkTitle = linkTitle || inferredPlainFileName
+        fileExt = fileExt || extname(inferredPlainFileName).replace(/^\./, '')
+        appMsgKind = 'file'
+      }
+
+      // 微信 4.x 的文件消息不一定使用通用 localType=49；部分版本使用
+      // 34359738417 / 103079215153 / 25769803825。它们即使 XML 外层
+      // 不完整，也应统一标记为 file，供消息推送和附件定位使用。
+      if (
+        !appMsgKind
+        && FILE_APP_LOCAL_TYPE_SET.has(localType)
+        && localType !== 49
+      ) {
+        appMsgKind = 'file'
+      }
+      if (!appMsgKind && (xmlType === '6' || Boolean(fileName && FILE_APP_LOCAL_TYPE_SET.has(localType)))) {
+        appMsgKind = 'file'
+      }
+
       const localId = this.getRowInt(row, ['local_id'], 0)
       const serverIdRaw = this.normalizeUnsignedIntegerToken(row.server_id)
       const serverId = this.getRowInt(row, ['server_id'], 0)
@@ -7491,6 +7515,19 @@ class ChatService {
 
   private stripSenderPrefix(content: string): string {
     return content.replace(/^[\s]*([a-zA-Z0-9_@-]+):(?!\/\/)(?:\s*(?:\r?\n|<br\s*\/?>)\s*|\s*)/i, '')
+  }
+
+  private inferPlainAttachmentFileName(content: string, localType: number): string | undefined {
+    if (localType !== 49) return undefined
+
+    let text = this.decodeHtmlEntities(String(content || '')).trim()
+    if (!text || text.includes('<appmsg') || text.includes('<msg')) return undefined
+    text = this.stripSenderPrefix(text).replace(/^\[文件\]\s*/u, '').trim()
+    if (!text || text.includes('\n') || text.includes('\r')) return undefined
+
+    // 只接受完整的一行常见附件文件名，避免把普通链接卡片或聊天文字误判成文件。
+    const fileNamePattern = /^[^\\/:*?"<>|]{1,240}\.(?:txt|md|markdown|log|csv|tsv|json|jsonl|xml|yaml|yml|ini|conf|cfg|pdf|doc|docx|xls|xlsx|ppt|pptx|wps|et|dps|rtf|zip|rar|7z|tar|gz|bz2|xz|apk|exe|msi|dmg|pkg|py|js|jsx|ts|tsx|java|kt|kts|c|cc|cpp|cxx|h|hpp|go|rs|php|rb|sh|bat|cmd|ps1|sql|html|htm|css|scss|less)$/iu
+    return fileNamePattern.test(text) ? text : undefined
   }
 
   private extractSenderUsernameFromContent(content: string): string | null {

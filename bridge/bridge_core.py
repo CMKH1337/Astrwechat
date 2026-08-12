@@ -47,6 +47,8 @@ class WeFlowBridge:
         self._sent_recently = {}
         self._sse_event_keys = {}
         self._pending_mention_images = {}  # session_id → {"data": data, "time": timestamp} 先媒体后文暂存
+        self._pending_mention_files = {}  # (群会话, 发送者) → 最近待关联文件列表
+        self._pending_file_ttl = 5 * 60
 
     def should_ignore(self, data):
         content = data.get("content", "")
@@ -86,12 +88,165 @@ class WeFlowBridge:
 
         return False
 
+    @staticmethod
+    def _is_file_event(data):
+        """兼容 Electron 归一化字段和微信 4.x 文件 localType 变体。"""
+        if str(data.get("appMsgKind") or "").strip().lower() == "file":
+            return True
+        try:
+            local_type = int(data.get("localType") or data.get("msgType") or 0)
+        except (TypeError, ValueError):
+            local_type = 0
+        if local_type in (34359738417, 103079215153, 25769803825):
+            return True
+        if str(data.get("fileName") or "").strip():
+            return True
+        if local_type == 49:
+            content = str(data.get("content") or "").strip()
+            file_name_pattern = re.compile(
+                r'^[^\\/:*?"<>|]{1,240}\.(?:txt|md|markdown|log|csv|tsv|json|jsonl|xml|yaml|yml|ini|conf|cfg|pdf|doc|docx|xls|xlsx|ppt|pptx|wps|et|dps|rtf|zip|rar|7z|tar|gz|bz2|xz|apk|exe|msi|dmg|pkg|py|js|jsx|ts|tsx|java|kt|kts|c|cc|cpp|cxx|h|hpp|go|rs|php|rb|sh|bat|cmd|ps1|sql|html|htm|css|scss|less)$',
+                re.IGNORECASE,
+            )
+            return bool(file_name_pattern.fullmatch(content))
+        return False
+
+    @staticmethod
+    def _group_sender_identity(data):
+        """优先使用 wxid；旧版 SSE 缺字段时才退回显示名。"""
+        value = (
+            data.get("senderUsername")
+            or data.get("senderId")
+            or data.get("senderName")
+            or data.get("sender")
+            or data.get("sourceName")
+            or ""
+        )
+        return str(value).strip().casefold()
+
+    def _pending_group_file_key(self, data):
+        session_id = str(data.get("sessionId") or data.get("talkerId") or "").strip()
+        sender_id = self._group_sender_identity(data)
+        return (session_id, sender_id) if session_id and sender_id else None
+
+    def _prune_pending_group_files_locked(self, now=None):
+        now = time.time() if now is None else now
+        expired_keys = []
+        for key, entries in self._pending_mention_files.items():
+            alive = [
+                entry for entry in entries
+                if now - float(entry.get("time") or 0) <= self._pending_file_ttl
+            ]
+            if alive:
+                self._pending_mention_files[key] = alive[-5:]
+            else:
+                expired_keys.append(key)
+        for key in expired_keys:
+            self._pending_mention_files.pop(key, None)
+
+    def _cache_pending_group_file(self, data):
+        key = self._pending_group_file_key(data)
+        if not key:
+            log.warning("📎 群文件缺少会话或发送者身份，无法等待 @ 关联")
+            return False
+
+        file_name = os.path.basename(str(
+            data.get("fileName") or data.get("content") or ""
+        ).strip())
+        entry = {
+            "data": dict(data),
+            "time": time.time(),
+            "file_name": file_name,
+            "ready": threading.Event(),
+            "display_text": None,
+        }
+        with self.buffer_lock:
+            self._prune_pending_group_files_locked(entry["time"])
+            bucket = self._pending_mention_files.setdefault(key, [])
+            bucket.append(entry)
+            if len(bucket) > 5:
+                del bucket[:-5]
+
+        threading.Thread(
+            target=self._prepare_pending_group_file,
+            args=(entry,),
+            daemon=True,
+        ).start()
+        log.info(
+            f"📎 暂存群文件，等待同一成员 @ 指令: {file_name} "
+            f"(session={key[0]}, sender={key[1]})"
+        )
+        return True
+
+    def _prepare_pending_group_file(self, entry):
+        try:
+            entry["display_text"] = self._resolve_file_message_text(entry["data"])
+        except Exception as error:
+            file_name = entry.get("file_name") or "[文件]"
+            entry["display_text"] = f"{file_name}\n[文件处理失败: {error}]"
+            log.warning(f"📎 群文件后台处理失败: {error}")
+        finally:
+            entry["ready"].set()
+
+    def _claim_pending_group_file(self, mention_data):
+        key = self._pending_group_file_key(mention_data)
+        if not key:
+            return None
+        content = str(mention_data.get("content") or "").casefold()
+        with self.buffer_lock:
+            self._prune_pending_group_files_locked()
+            entries = self._pending_mention_files.get(key, [])
+            if not entries:
+                return None
+
+            # 指令中明确写了文件名时精确选取；否则选择该成员最近发送的文件。
+            selected_index = None
+            for index in range(len(entries) - 1, -1, -1):
+                file_name = str(entries[index].get("file_name") or "").casefold()
+                if file_name and file_name in content:
+                    selected_index = index
+                    break
+            if selected_index is None:
+                selected_index = len(entries) - 1
+
+            entry = entries.pop(selected_index)
+            if entries:
+                self._pending_mention_files[key] = entries
+            else:
+                self._pending_mention_files.pop(key, None)
+            return entry
+
+    def _process_group_file_mention(self, mention_data, file_entry):
+        file_name = file_entry.get("file_name") or "[文件]"
+        log.info(f"📎 已关联群文件与 @ 指令，等待路径准备: {file_name}")
+        ready = file_entry["ready"].wait(timeout=180)
+        if ready:
+            file_text = file_entry.get("display_text") or f"{file_name}\n[文件路径不可用]"
+        else:
+            file_text = f"{file_name}\n[文件仍在下载，等待超时]"
+            log.warning(f"📎 群文件与 @ 指令关联后等待超时: {file_name}")
+
+        session_id = str(mention_data.get("sessionId") or mention_data.get("talkerId") or "")
+        source_name = str(mention_data.get("sourceName") or "未知")
+        group_name = str(mention_data.get("groupName") or "")
+        instruction = str(mention_data.get("content") or "").strip()
+        sender_identity = self._group_sender_identity(mention_data) or source_name.casefold()
+        sender_key = f"{session_id}_{sender_identity}_file"
+        combined = f"{file_text}\n{instruction}" if instruction else file_text
+
+        self.add_text_to_buffer(
+            session_id,
+            source_name,
+            group_name,
+            session_id,
+            combined,
+            True,
+            sender_key,
+        )
+        log.info(f"📎 群文件路径和 @ 指令已合并推送: {file_name}")
+
     def add_to_buffer(self, data):
         """将消息加入缓冲区，等待合并后统一推送给 AstrBot。"""
         content = data.get("content", "")
-        file_path = data.get("filePath", "")
-        if data.get("appMsgKind") == "file" and file_path:
-            content = f"{content}\n[本机文件路径] {file_path}"
         source_name = data.get("sourceName", "") or data.get("talkerName", "") or "未知"
 
         # 先判断群聊/私聊（图片/表情分支也需要用到）
@@ -120,6 +275,34 @@ class WeFlowBridge:
             threading.Thread(target=self.process_emoji_message,
                            args=(data,), daemon=True).start()
             return
+
+        if self._is_file_event(data):
+            log.info(
+                "📎 识别文件事件: "
+                f"name={data.get('fileName') or content}; "
+                f"kind={data.get('appMsgKind') or '-'}; "
+                f"localType={data.get('localType') or data.get('msgType') or '-'}; "
+                f"hasPath={bool(data.get('filePath'))}"
+            )
+            # mention 模式下文件卡片本身无法携带 @，先按“群+发送者”暂存，
+            # 等同一成员随后发 @ 指令后再把路径和指令合并给 AstrBot。
+            if is_group and state.group_reply_mode == "mention" and not self._is_mentioned(data):
+                self._cache_pending_group_file(data)
+                return
+            threading.Thread(
+                target=self.process_file_message, args=(data,), daemon=True
+            ).start()
+            return
+
+        if is_group and state.group_reply_mode == "mention" and self._is_mentioned(data):
+            pending_file = self._claim_pending_group_file(data)
+            if pending_file:
+                threading.Thread(
+                    target=self._process_group_file_mention,
+                    args=(dict(data), pending_file),
+                    daemon=True,
+                ).start()
+                return
 
         now = time.time()
         if content and content in self._sent_recently and now - self._sent_recently[content] < 120:
@@ -319,6 +502,18 @@ class WeFlowBridge:
                                     log.info(f"   @={mentioned}")
                             else:
                                 log.info(f"📩 收到: {data.get('sourceName','')} → {data.get('content','')[:50]}")
+                            if (
+                                data.get("appMsgKind")
+                                or data.get("fileName")
+                                or int(data.get("localType") or data.get("msgType") or 0) != 1
+                            ):
+                                log.info(
+                                    "📋 消息类型: "
+                                    f"localType={data.get('localType') or data.get('msgType') or '-'}; "
+                                    f"kind={data.get('appMsgKind') or '-'}; "
+                                    f"fileName={data.get('fileName') or '-'}; "
+                                    f"fileSize={data.get('fileSize') or '-'}"
+                                )
                             self.add_to_buffer(data)
                     except json.JSONDecodeError:
                         pass
@@ -523,6 +718,233 @@ class WeFlowBridge:
         except OSError as error:
             log.warning(f"读取图片失败: {error}")
             return None
+
+    def _select_file_message(self, messages, event_data, allow_time_fallback=False):
+        """按 serverId、localId、文件名和时间定位本次文件消息。"""
+        if not isinstance(messages, list):
+            return None
+
+        target_name = os.path.basename(str(
+            event_data.get("fileName") or event_data.get("content") or ""
+        ).strip()).casefold()
+        candidates = []
+        for msg in messages:
+            if not isinstance(msg, dict):
+                continue
+            msg_name = os.path.basename(str(
+                msg.get("fileName")
+                or msg.get("mediaFileName")
+                or msg.get("content")
+                or ""
+            ).strip()).casefold()
+            if (
+                msg.get("mediaType") == "file"
+                or msg.get("appMsgKind") == "file"
+                or (target_name and target_name in msg_name)
+            ):
+                candidates.append(msg)
+        if not candidates:
+            return None
+
+        target_server_id = self._normalize_message_id(
+            event_data.get("serverId") or event_data.get("rawid")
+        )
+        target_local_id = int(event_data.get("localId") or 0)
+        target_timestamp = int(event_data.get("timestamp") or 0)
+
+        if target_server_id:
+            for msg in candidates:
+                candidate_id = self._normalize_message_id(
+                    msg.get("serverId") or msg.get("serverIdRaw") or msg.get("rawid")
+                )
+                if candidate_id and candidate_id == target_server_id:
+                    return msg
+        if target_local_id > 0:
+            for msg in candidates:
+                if int(msg.get("localId") or 0) == target_local_id:
+                    return msg
+        if target_name:
+            exact = [
+                msg for msg in candidates
+                if os.path.basename(str(
+                    msg.get("fileName")
+                    or msg.get("mediaFileName")
+                    or msg.get("content")
+                    or ""
+                ).strip()).casefold() == target_name
+            ]
+            if len(exact) == 1:
+                return exact[0]
+
+        if (target_server_id or target_local_id > 0) and not allow_time_fallback:
+            return None
+        if target_timestamp > 0:
+            nearby = []
+            for msg in candidates:
+                create_time = int(msg.get("createTime") or msg.get("timestamp") or 0)
+                if not create_time:
+                    continue
+                distance = abs(create_time - target_timestamp)
+                if distance <= 30:
+                    nearby.append((distance, 0 if msg.get("mediaLocalPath") else 1, msg))
+            if nearby:
+                nearby.sort(key=lambda item: (item[0], item[1]))
+                return nearby[0][2]
+        return candidates[0] if allow_time_fallback else None
+
+    @staticmethod
+    def _is_downloaded_file_ready(file_path: str, expected_size=0) -> bool:
+        """确认文件已写完，避免把仍在下载中的路径提前交给 AstrBot。"""
+        try:
+            first = os.stat(file_path)
+            if first.st_size <= 0:
+                return False
+            expected = int(expected_size or 0)
+            if expected > 0:
+                return first.st_size == expected
+            time.sleep(0.35)
+            second = os.stat(file_path)
+            return (
+                first.st_size == second.st_size
+                and first.st_mtime_ns == second.st_mtime_ns
+            )
+        except (OSError, TypeError, ValueError):
+            return False
+
+    def _query_wechat_file(self, event_data: dict, allow_time_fallback=False) -> str | None:
+        talker = str(
+            event_data.get("sessionId") or event_data.get("talkerId") or ""
+        ).strip()
+        if not talker:
+            return None
+
+        params = {
+            "access_token": config.ACCESS_TOKEN,
+            "talker": talker,
+            "media": "true",
+            "image": "false",
+            "voice": "false",
+            "video": "false",
+            "emoji": "false",
+            "file": "true",
+            "file_source_only": "true",
+            "limit": 30,
+        }
+        target_server_id = self._normalize_message_id(
+            event_data.get("serverId") or event_data.get("rawid")
+        )
+        target_local_id = int(event_data.get("localId") or 0)
+        target_timestamp = int(event_data.get("timestamp") or 0)
+        if target_timestamp > 0:
+            params["start"] = max(0, target_timestamp - 30)
+            params["end"] = target_timestamp + 60
+        if not allow_time_fallback:
+            if target_server_id:
+                params["server_id"] = target_server_id
+            if target_local_id > 0:
+                params["local_id"] = target_local_id
+
+        try:
+            response = requests.get(
+                f"{config.WE_FLOW_BASE_URL}/api/v1/messages",
+                params=params,
+                timeout=30,
+            )
+            if response.status_code != 200:
+                return None
+            payload = response.json()
+            messages = (
+                payload
+                if isinstance(payload, list)
+                else payload.get("messages", payload.get("data", []))
+            )
+            selected = self._select_file_message(
+                messages, event_data, allow_time_fallback
+            )
+            if not selected:
+                return None
+            local_path = str(
+                selected.get("mediaSourcePath")
+                or selected.get("mediaLocalPath")
+                or ""
+            ).strip()
+            expected_size = selected.get("fileSize") or event_data.get("fileSize") or 0
+            if (
+                local_path
+                and os.path.isfile(local_path)
+                and self._is_downloaded_file_ready(local_path, expected_size)
+            ):
+                return os.path.abspath(local_path)
+        except Exception as error:
+            log.warning(f"查询微信文件路径失败: {error}")
+        return None
+
+    def _resolve_file_message_text(self, data):
+        """等待微信自动下载文件，返回带原始路径的文本。"""
+        file_name = os.path.basename(str(
+            data.get("fileName") or data.get("content") or ""
+        ).strip())
+        display_text = str(data.get("content") or file_name or "[文件]").strip()
+
+        direct_path = str(data.get("filePath") or "").strip()
+        resolved_path = (
+            os.path.abspath(direct_path)
+            if (
+                direct_path
+                and os.path.isfile(direct_path)
+                and self._is_downloaded_file_ready(
+                    direct_path, data.get("fileSize") or 0
+                )
+            )
+            else None
+        )
+
+        if not resolved_path:
+            resolved_path = self._query_wechat_file(data)
+
+        if not resolved_path:
+            log.info(f"📎 等待微信自动下载文件: {file_name}")
+            retry_delays = (
+                0.8, 1.2, 1.8, 2.5, 3.5, 5.0, 7.0, 10.0,
+                15.0, 20.0, 25.0, 30.0
+            )
+            for index, delay in enumerate(retry_delays, start=1):
+                time.sleep(delay)
+                resolved_path = self._query_wechat_file(
+                    data,
+                    allow_time_fallback=index == len(retry_delays),
+                )
+                if resolved_path:
+                    log.info(f"📎 微信自动下载完成: {resolved_path}")
+                    break
+                log.info(
+                    f"📎 等待微信自动下载 attempt={index}/{len(retry_delays)}: "
+                    f"{file_name}"
+                )
+
+        if resolved_path:
+            return f"{display_text}\n[本机文件路径] {resolved_path}"
+
+        log.warning(f"⚠️ 等待微信自动下载超时: {file_name}")
+        return f"{display_text}\n[文件等待超时，尚未下载到本机]"
+
+    def process_file_message(self, data):
+        """私聊/全量群聊：文件准备完成后直接推送给 AstrBot。"""
+        session_id = str(data.get("sessionId") or data.get("talkerId") or "")
+        source_name = str(data.get("sourceName") or "未知")
+        group_name = str(data.get("groupName") or "")
+        is_group = bool(group_name) or "@chatroom" in session_id
+        display_text = self._resolve_file_message_text(data)
+
+        self.add_text_to_buffer(
+            session_id,
+            source_name,
+            group_name,
+            session_id,
+            display_text,
+            is_group,
+            session_id,
+        )
 
     def process_image_message(self, data):
         """处理图片消息：从 WeFlow 下载后，以 OneBot 图片段直接转发。"""

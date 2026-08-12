@@ -8,6 +8,7 @@ import { join, dirname } from 'path'
 import { autoUpdater } from 'electron-updater'
 import { readFile, writeFile, appendFile, mkdir, rm, readdir } from 'fs/promises'
 import { existsSync } from 'fs'
+import packageMetadata from '../package.json'
 import { ConfigService } from './services/config'
 import { resolveAppIconPath } from './appIcon'
 import { dbPathService } from './services/dbPathService'
@@ -49,7 +50,10 @@ autoUpdater.disableDifferentialDownload = true  // 禁用差分更新，强制�
 // - 开发版（如 26.4.5）默认走 dev（年.月.日）
 // - 用户可在设置页切换稳定/预览/开发，切换后即时生效
 // 同时区分 Windows x64 / arm64，避免更新清单互相覆盖。
-const appVersion = app.getVersion()
+// app.getVersion() reports the Electron runtime version when a development launch
+// points directly at dist-electron/main.js. Use project metadata as the
+// authoritative product version so development and packaged builds agree.
+const appVersion = String(packageMetadata.version || app.getVersion()).trim()
 const inferUpdateTrackFromVersion = (version: string): 'stable' | 'preview' | 'dev' => {
   const normalized = String(version || '').trim().replace(/^v/i, '')
   if (/^0\.\d{2}\.\d+$/i.test(normalized)) return 'preview'
@@ -1273,14 +1277,14 @@ function createSplashWindow(): BrowserWindow {
     const splashUrl = new URL('splash.html', process.env.VITE_DEV_SERVER_URL)
     splashUrl.searchParams.set('themeId', splashThemeId)
     splashUrl.searchParams.set('themeMode', splashThemeMode)
-    splashUrl.searchParams.set('version', app.getVersion())
+    splashUrl.searchParams.set('version', appVersion)
     splashWindow.loadURL(splashUrl.toString())
   } else {
     splashWindow.loadFile(join(__dirname, '../dist/splash.html'), {
       query: {
         themeId: splashThemeId,
         themeMode: splashThemeMode,
-        version: app.getVersion()
+        version: appVersion
       }
     })
   }
@@ -1880,7 +1884,7 @@ function registerIpcHandlers() {
   })
 
   ipcMain.handle('app:getVersion', async () => {
-    return app.getVersion()
+    return appVersion
   })
 
   ipcMain.handle('app:getLaunchAtStartupStatus', async () => {
@@ -1966,7 +1970,7 @@ function registerIpcHandlers() {
     try {
       const result = await autoUpdater.checkForUpdates()
       if (result && result.updateInfo) {
-        const currentVersion = app.getVersion()
+        const currentVersion = appVersion
         const latestVersion = result.updateInfo.version
         if (shouldOfferUpdateForTrack(latestVersion, currentVersion)) {
           return {
@@ -3086,7 +3090,7 @@ function checkForUpdatesOnStartup() {
     try {
       const result = await autoUpdater.checkForUpdates()
       if (result && result.updateInfo) {
-        const currentVersion = app.getVersion()
+        const currentVersion = appVersion
         const latestVersion = result.updateInfo.version
 
         // 检查是否有新版本

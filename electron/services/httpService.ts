@@ -8,6 +8,7 @@ import * as path from 'path'
 import { URL } from 'url'
 import { timingSafeEqual } from 'crypto'
 import { chatService, Message } from './chatService'
+import { FILE_APP_LOCAL_TYPE_SET } from './export/constants'
 import { wcdbService } from './wcdbService'
 import { ConfigService } from './config'
 import { videoService } from './videoService'
@@ -81,6 +82,7 @@ interface ApiMediaOptions {
   exportVideos: boolean
   exportEmojis: boolean
   exportFiles: boolean
+  sourceFilesOnly: boolean
 }
 
 type MediaKind = 'image' | 'voice' | 'video' | 'emoji' | 'file'
@@ -91,6 +93,7 @@ interface ApiExportedMedia {
   fileName: string
   fullPath: string
   relativePath: string
+  sourcePath?: string
 }
 
 interface MessagePushReplayEvent {
@@ -987,7 +990,8 @@ class HttpService {
         exportVoices: false,
         exportVideos: false,
         exportEmojis: false,
-        exportFiles: false
+        exportFiles: false,
+        sourceFilesOnly: false
       }
     }
 
@@ -997,7 +1001,8 @@ class HttpService {
       exportVoices: this.parseBooleanParam(url, ['voice', 'vioce'], true),
       exportVideos: this.parseBooleanParam(url, ['video'], true),
       exportEmojis: this.parseBooleanParam(url, ['emoji'], true),
-      exportFiles: this.parseBooleanParam(url, ['file', 'wenjian'], false)
+      exportFiles: this.parseBooleanParam(url, ['file', 'wenjian'], false),
+      sourceFilesOnly: this.parseBooleanParam(url, ['file_source_only'], false)
     }
   }
 
@@ -1526,17 +1531,47 @@ class HttpService {
         }
       }
 
-      if (msg.appMsgKind === 'file' && options.exportFiles) {
+      const isKnownFileVariant = FILE_APP_LOCAL_TYPE_SET.has(Number(msg.localType || 0))
+        && Number(msg.localType || 0) !== 49
+      const isFileMessage = msg.appMsgKind === 'file'
+        || msg.xmlType === '6'
+        || isKnownFileVariant
+      if (isFileMessage && options.exportFiles) {
         const sourcePath = await chatService.resolveDownloadedFile(msg)
         if (sourcePath && fs.existsSync(sourcePath)) {
-          const sourceName = path.basename(sourcePath)
+          const resolvedSourcePath = path.resolve(sourcePath)
+          const sourceName = path.basename(resolvedSourcePath)
           const fileName = this.sanitizeFileName(msg.fileName || sourceName, sourceName)
+          if (options.sourceFilesOnly) {
+            return {
+              kind: 'file',
+              fileName,
+              fullPath: resolvedSourcePath,
+              relativePath: '',
+              sourcePath: resolvedSourcePath
+            }
+          }
           const targetDir = path.join(sessionDir, 'files')
           const fullPath = path.join(targetDir, fileName)
           this.ensureDir(targetDir)
-          this.writeFileIfLarger(fullPath, fs.readFileSync(sourcePath))
+          const sourceStat = await fs.promises.stat(sourcePath)
+          let targetSize = -1
+          try {
+            targetSize = (await fs.promises.stat(fullPath)).size
+          } catch {
+            // target does not exist yet
+          }
+          if (targetSize !== sourceStat.size) {
+            await fs.promises.copyFile(sourcePath, fullPath)
+          }
           const relativePath = `${this.sanitizeFileName(talker, 'session')}/files/${fileName}`
-          return { kind: 'file', fileName, fullPath, relativePath }
+          return {
+            kind: 'file',
+            fileName,
+            fullPath,
+            relativePath,
+            sourcePath: resolvedSourcePath
+          }
         }
       }
 
@@ -1560,13 +1595,21 @@ class HttpService {
       senderUsername: msg.senderUsername,
       imageMd5: msg.imageMd5,
       imageDatName: msg.imageDatName,
+      appMsgKind: msg.appMsgKind,
+      fileName: msg.fileName,
+      fileSize: msg.fileSize,
+      fileExt: msg.fileExt,
+      fileMd5: msg.fileMd5,
       content: this.getMessageContent(msg, quoteInfo),
       rawContent: msg.rawContent,
       parsedContent: msg.parsedContent,
       mediaType: media?.kind,
       mediaFileName: media?.fileName,
-      mediaUrl: media ? `http://${this.host}:${this.port}/api/v1/media/${media.relativePath}` : undefined,
-      mediaLocalPath: media?.fullPath
+      mediaUrl: media?.relativePath
+        ? `http://${this.host}:${this.port}/api/v1/media/${media.relativePath}`
+        : undefined,
+      mediaLocalPath: media?.fullPath,
+      mediaSourcePath: media?.sourcePath
     }
 
     if (quoteInfo?.replyToMessageId) {
@@ -1879,7 +1922,9 @@ class HttpService {
           type: this.mapMessageType(msg.localType, msg),
           content: this.getMessageContent(msg, quoteInfo),
           platformMessageId: this.getMessageServerId(msg) || undefined,
-          mediaPath: mediaMap.get(msg.localId) ? `http://${this.host}:${this.port}/api/v1/media/${mediaMap.get(msg.localId)!.relativePath}` : undefined
+          mediaPath: mediaMap.get(msg.localId)?.relativePath
+            ? `http://${this.host}:${this.port}/api/v1/media/${mediaMap.get(msg.localId)!.relativePath}`
+            : undefined
         }
         if (quoteInfo?.replyToMessageId) {
           chatLabMessage.replyToMessageId = quoteInfo.replyToMessageId

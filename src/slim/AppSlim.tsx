@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Routes, Route, Navigate, NavLink } from 'react-router-dom'
 import { Database, Radio, ScrollText, Settings, Plug } from 'lucide-react'
 import ConnectPage from './pages/ConnectPage'
@@ -66,6 +66,12 @@ function MainLayout() {
 
 export default function AppSlim() {
   const [showStartup, setShowStartup] = useState(true)
+  // Vite 的 BASE_URL 在开发环境是 /，生产 file:// 构建是 ./。
+  // 使用 URL 解析可同时兼容 Vite HTTP 开发服务和 Electron file:// 页面。
+  const startupIconUrl = useMemo(
+    () => new URL(`${import.meta.env.BASE_URL}icon.png`, window.location.href).href,
+    []
+  )
 
   useEffect(() => {
     const timer = window.setTimeout(() => setShowStartup(false), 2200)
@@ -81,7 +87,7 @@ export default function AppSlim() {
           <div className="slim-startup__content">
             <div className="slim-startup__icon-stage" aria-hidden="true">
               <span className="slim-startup__ring" />
-              <img className="slim-startup__icon" src="/icon.png" alt="" />
+              <img className="slim-startup__icon" src={startupIconUrl} alt="" />
             </div>
             <span className="slim-startup__eyebrow">ASTRWECHAT</span>
             <h1>AstrWeChat</h1>

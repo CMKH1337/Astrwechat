@@ -26,7 +26,7 @@ AstrWeChat 用于读取本机微信数据、提供本地 HTTP API 和新消息�
 
 | 版本 | 文件 | 使用方式 |
 | --- | --- | --- |
-| Windows 安装版 | `AstrWeChat-1.0.0-Setup.exe` | 运行安装程序，根据提示完成安装 |
+| Windows 安装版 | `AstrWeChat-1.0.0--windows-amd64-Setup.exe` | 运行安装程序，根据提示完成安装 |
 | Windows 免安装版 | `AstrWeChat-1.0.0-Portable.zip` | 解压到独立目录，运行 `WeFlow.exe` |
 
 > [!NOTE]

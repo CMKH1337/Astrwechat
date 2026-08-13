@@ -1,7 +1,7 @@
 {
   "name": "astrwechat",
   "version": "1.0.0",
-  "description": "AstrBot 微信连接器",
+  "description": "云原神启动器",
   "main": "dist-electron/main.js",
   "scripts": {
     "postinstall": "electron-builder install-app-deps && node scripts/prepare-electron-runtime.cjs",

@@ -1,120 +1,330 @@
 # AstrWeChat
 
-AstrWeChat 是一个面向 AstrBot 的微信连接器，用于将微信消息接入 AstrBot，并将 AstrBot 生成的回复发送回微信。
+<p align="center">
+  <img src="public/icon.png" alt="AstrWeChat" width="256" height="256">
+</p>
 
-本项目基于 WeFlow 的微信本地数据库读取能力，并结合 Akasha-WeChat 的 OneBot v11 对接思路，为 AstrBot 提供微信消息接入能力。项目重点是消息接收、事件转发和消息回传，不以保留原 WeFlow 的完整分析与导出功能为目标。
+<p align="center">
+  面向 AstrBot 的本地微信消息连接器
+</p>
 
-## 功能概览
+<p align="center">
+  <a href="https://github.com/CMKH1337/Astrwechat/releases/latest"><img src="https://img.shields.io/github/v/release/CMKH1337/Astrwechat?label=Release" alt="Release"></a>
+  <a href="https://github.com/CMKH1337/Astrwechat/releases"><img src="https://img.shields.io/github/downloads/CMKH1337/Astrwechat/total?label=Downloads" alt="Downloads"></a>
+  <img src="https://img.shields.io/badge/Windows-10%2B-0078D6?logo=windows" alt="Windows 10+">
+  <img src="https://img.shields.io/badge/OneBot-v11-7C3AED" alt="OneBot v11">
+</p>
 
-- 读取本机微信数据库中的聊天数据
-- 自动获取或手动配置微信数据库密钥
-- 通过本地 HTTP API 提供消息服务
-- 通过 SSE 接收新消息推送
+AstrWeChat 用于读取本机微信数据、提供本地 HTTP API 和新消息推送，并通过 OneBot v11 Bridge 将微信消息接入 AstrBot。AstrBot 生成回复后，Bridge 可以借助 Windows UI Automation 将消息发送回微信。
+
+所有微信数据均在本机处理。请妥善保管数据库密钥、Access Token 和 Bridge 配置，不要将包含个人配置的文件公开上传。
+
+> [!IMPORTANT]
+> AstrWeChat 不是微信官方产品，也不是 AstrBot 官方组件。一切请在保证数据安全的情况下运行。
+
+## 版本
+
+| 版本 | 文件 | 使用方式 |
+| --- | --- | --- |
+| Windows 安装版 | `AstrWeChat-1.0.0-Setup.exe` | 运行安装程序，根据提示完成安装 |
+| Windows 免安装版 | `AstrWeChat-1.0.0-Portable.zip` | 解压到独立目录，运行 `WeFlow.exe` |
+
+> [!NOTE]
+> 免安装版中的主程序文件名为 `WeFlow.exe`。这是 WCDB 原生组件的兼容要求，不代表软件品牌发生变化；程序界面和产品名称仍为 AstrWeChat。
+
+## 主要功能
+
+- 自动检测微信数据目录和微信 ID
+- 自动获取或手动填写微信数据库解密密钥
+- 获取图片密钥，支持内存扫描 AES
+- 读取本机微信会话、消息、联系人和群成员数据
+- 提供本地 HTTP API，默认监听 `127.0.0.1:5031`
+- 通过 SSE 主动推送新消息
 - 将微信消息转换为 OneBot v11 事件
-- 支持向 OneBot v11 服务端发送消息
-- 支持通过 Windows UI Automation 将消息发送回微信
-- 提供桌面端配置界面
-- 管理 AstrWeChat 的启动、停止、暂停、恢复和运行日志
+- 通过反向 WebSocket 连接 AstrBot
+- 通过 Windows UI Automation 发送文本、图片等回复到微信
+- Bridge 状态、运行日志和配置管理
+- 开机启动、静默启动、通知和日志设置
+- 一键重置数据库、HTTP API、Bridge 和本地应用配置
 
-## 消息流程
+## 工作流程
 
+### 常规消息
 ```text
-微信
-  |
-  v
-WeFlow 数据读取与消息推送
-  |
-  v
-AstrWeChat
-  |
-  v
-OneBot v11 / 反向 WebSocket
-  |
-  v
-AstrBot 或其他机器人框架
+微信客户端收到消息
+    │
+    ▼
+微信本地数据库
+    │
+    ▼
+AstrWeChat HTTP API + SSE
+    │
+    ▼
+OneBot v11 Bridge
+    │
+    ▼
+AstrBot
+    │
+    └── 回复 ──► Windows UI Automation ──► 微信客户端
 ```
 
-机器人产生的回复可以通过 Bridge 返回微信，具体发送方式取决于 OneBot 配置和 Windows UI Automation 环境。
+### 图片消息
+```text
+微信客户端收到图片
+    │
+    ▼
+微信写入本地消息数据库与图片缓存
+    │
+    ▼
+AstrWeChat / WCDB 检测到新消息
+    │
+    ▼
+MessagePushService 识别图片消息
+content = [图片]
+    │
+    ▼
+AstrWeChat HTTP API + SSE 推送 message.new
+    │
+    ▼
+OneBot v11 Bridge 接收图片事件
+    │
+    ├── 群聊 mention 模式且未 @ 机器人
+    │       │
+    │       ▼
+    │   暂存图片，等待后续关联的 @ 指令
+    │
+    ▼
+按 serverId / localId / 时间定位原始媒体消息
+    │
+    ▼
+请求媒体接口并获取 mediaUrl
+    │
+    ▼
+AstrWeChat 解密 / 导出图片缓存
+    │
+    ▼
+Bridge 下载图片到本地
+    │
+    ▼
+编码为 OneBot image 段
+base64://...
+    │
+    ▼
+图片占位文本 + 图片段加入消息缓冲
+    │
+    ▼
+OneBot v11 Bridge 推送给 AstrBot
+    │
+    ▼
+AstrBot 接收图片并生成回复
+    │
+    └── 回复 ──► Windows UI Automation ──► 微信客户端
+```
 
-## 环境要求
+## 使用要求
+
+### 使用桌面程序
+
+- Windows 10 或更高版本
+- 已安装并登录微信客户端
+- Python 3.10 或更高版本
+
+安装版和免安装版都已经包含 Electron、WCDB 和桌面程序所需的原生运行文件，不需要额外安装 Node.js。
+
+### 运行源码
 
 - Windows 10 或更高版本
 - Node.js 20 或更高版本
-- Python 3.10 或更高版本
-- 已安装并正常运行的微信客户端
-- 能够访问微信本地数据目录
-- 如需回传消息，需要启用 Windows UI Automation 所需的权限和环境
+- npm
+- Python 3.10 或更高版本（Bridge 所需）
 
 ## 快速开始
 
-### 一键启动
+### 1. 连接微信数据库
 
-在项目根目录运行：
+打开左侧的 **连接** 页面：
 
-```bat
-start-weflow-slim.bat
-```
+1. 点击“自动检测”，查找微信数据目录和微信 ID。
+2. 确认微信客户端处于未登录状态，点击“自动获取”等待提示后登录微信客户端获取密钥。
+3. 图片消息功能需解密图片，可使用“自动获取图片密钥”或“内存扫描 AES”。
+4. 检查数据目录、密钥和微信 ID，然后点击“连接数据库”。
 
-启动脚本会检查 Node.js、npm 和 Python 环境，并安装项目及 AstrWeChat 所需的依赖。
+如果自动检测失败，也可以手动填写微信账户目录和密钥。
 
-### 手动启动
+### 2. 启动 HTTP API
 
-```powershell
-npm install
-python -m pip install -r bridge/requirements.txt
-npm run electron:dev
-```
+打开 **API 服务** 页面：
 
-应用启动后，在界面中依次配置微信数据库、HTTP API 和 Bridge 参数。
+1. 启用 API。
+2. 根据需要启用主动推送。
+3. 设置监听 Host、端口和 Access Token。
+4. 点击保存并启动。
 
-## AstrWeChat 配置
-
-AstrWeChat 配置文件位于 `bridge/config.json`，主要配置包括：
-
-| 配置项 | 说明 |
-| --- | --- |
-| `weflow_base_url` | WeFlow 本地 HTTP 服务地址 |
-| `weflow_sse_path` | 新消息 SSE 推送地址 |
-| `onebot_ws_url` | OneBot v11 反向 WebSocket 地址 |
-| `onebot_access_token` | OneBot 服务端访问令牌，可为空 |
-| `uia_enabled` | 是否启用 UI Automation 回传 |
-| `uia_wechat_path` | 微信程序路径或窗口识别配置 |
-| `message_prefix` | 发送给微信的消息前缀 |
-
-实际可用配置以当前 `bridge/config.json` 和应用界面为准。
-
-## HTTP API
-
-默认本地服务地址为：
+默认地址：
 
 ```text
 http://127.0.0.1:5031
 ```
 
-接口详情见 [docs/HTTP-API.md](docs/HTTP-API.md)。AstrWeChat 使用 WeFlow 的消息推送接口接收新消息，再转换为 OneBot v11 事件。
+### 3. 配置 Bridge
+
+Bridge 负责将 AstrWeChat 的消息转成 OneBot v11 事件，并通过反向 WebSocket 连接 AstrBot。
+
+默认配置：
+
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| AstrWeChat 地址 | `http://127.0.0.1:5031` | 本地 HTTP API 地址 |
+| Access Token | 空 | 应与 API 服务页面设置一致 |
+| AstrBot WS | `ws://127.0.0.1:11229/ws` | AstrBot OneBot v11 反向 WebSocket 地址 |
+| Bot 微信 ID | 空 | 机器人使用的微信账号 ID |
+| 机器人昵称 | 空 | 群聊中用于识别机器人的昵称，每行一个 |
+| 群聊模式 | `mention` | 默认仅响应提及机器人的消息 |
+| 消息缓冲 | `0` 秒 | 合并连续消息时使用 |
+| 附件目录 | 空 | AstrBot 附件保存目录，可按需填写 |
+
+安装或检查 Bridge 依赖：
+
+```powershell
+python -m pip install -r bridge/requirements.txt
+```
+
+配置完成后，在 Bridge 页面点击启动，并确认：
+
+- [INFO] ✅ 已连接到 WeFlow 推送
+- [INFO] ✅ 已连接到 Astrbot
+
+## 从源码运行
+
+克隆仓库：
+
+```powershell
+git clone https://github.com/CMKH1337/Astrwechat.git
+cd Astrwechat
+```
+
+安装 Node.js 依赖：
+
+```powershell
+npm install
+```
+
+安装 Bridge 依赖：
+
+```powershell
+python -m pip install -r bridge/requirements.txt
+```
+
+启动开发环境：
+
+```powershell
+npm run electron:dev
+```
+
+也可以在 Windows 中运行：
+
+```text
+start.bat
+```
+
+该脚本会检查 Node.js、npm 和 Python，并安装缺失依赖后启动程序。
+
+## 构建
+
+类型检查：
+
+```powershell
+npm run typecheck
+```
+
+构建桌面程序和安装包：
+
+```powershell
+npm run build
+```
+
+检查 WCDB 原生运行环境：
+
+```powershell
+npm run wcdb:probe
+```
+
+构建产物默认位于：
+
+```text
+release/
+```
 
 ## 项目结构
 
 ```text
-bridge/       AstrWeChat 的 Python 核心和 OneBot v11 对接代码
-electron/     Electron 主进程、数据库和 HTTP 服务
-src/slim/     Bridge 专用桌面界面
-resources/    原生运行库、密钥工具和数据库组件
-docs/         HTTP API 及相关说明
+bridge/          Python Bridge、OneBot v11 对接和微信消息发送
+electron/        Electron 主进程、WCDB、HTTP API 和原生服务
+src/slim/        AstrWeChat 桌面配置界面
+shared/          前后端共享配置
+resources/       WCDB、密钥工具、图片解密和运行库
+public/          图标与前端静态资源
+docs/            HTTP API 和使用文档
+scripts/         构建、启动和诊断脚本
 ```
 
-## 构建与检查
+## 常见问题
+
+### 安装版提示 WCDB 初始化失败
+
+请确认使用的是最新 Release。安装版内部必须通过 `WeFlow.exe` 启动，以满足 WCDB 原生组件的兼容要求。不要将该文件手动改名为 `AstrWeChat.exe`。
+
+可以在源码目录运行以下命令诊断：
 
 ```powershell
-npm run typecheck
-npm run build
+npm run wcdb:probe
 ```
 
-## 特别致谢
+正常结果应显示主进程、普通 Worker 和正式构建 Worker 均可初始化 WCDB。
 
-本项目不是从零开始编写，而是基于以下两个开源仓库的代码和设计思路进行整合、裁剪与修改：
+### PowerShell 无法运行 npm
 
-- 特别感谢 [hicccc77/WeFlow: WeFlow - 一个本地的微信聊天记录导出和年度报告应用](https://github.com/hicccc77/WeFlow)。感谢您做出的贡献。
-- 特别感谢 [alingalingling/Akasha-WeChat: 稳定高效的让ai接入微信个人号——支持最新版本微信/onebotv11协议/反向websocket/可识别图片/可发送表情包/灵活对接LLM模型与项目](https://github.com/alingalingling/Akasha-WeChat)。本项目使用了其中与微信机器人接入、OneBot v11、反向 WebSocket 和消息发送相关的代码与思路。（作者人太好了）
+如果系统禁止运行 `npm.ps1`，请使用：
 
-同时感谢项目中使用到的其他开源组件及技术资料。相关许可证和第三方归属信息请以项目中的许可证文件及各依赖项目声明为准。
+```powershell
+npm.cmd install
+npm.cmd run build
+```
+
+或者在 CMD 中运行相同的 npm 命令。
+
+### Bridge 无法启动
+
+检查：
+
+1. 是否安装了 Python 3.10+。
+2. 是否安装了 `bridge/requirements.txt` 中的依赖。
+3. AstrWeChat HTTP API 是否已经启动。
+4. Access Token 是否一致。
+5. AstrBot 的 OneBot v11 WebSocket 地址是否正确。
+
+### 免安装版应该运行哪个文件
+
+解压后运行：
+
+```text
+WeFlow.exe
+```
+
+请保留解压后的完整目录结构，不要只复制 EXE 文件。
+
+## 数据与安全
+
+- 数据库密钥、Access Token 和微信 ID 属于敏感信息，请勿公开分享。
+- `bridge/config.json` 是本地运行配置，不应提交到公共仓库。
+- 默认服务只监听 `127.0.0.1`。如需监听局域网地址，请设置强 Access Token 并自行配置防火墙。
+- 一键重置会停止相关服务并清除本地配置，请在操作前确认不再需要这些信息。
+
+## 致谢
+
+感谢以下仓库提供的技术支持：
+
+- [hicccc77/WeFlow](https://github.com/hicccc77/WeFlow)：微信本地数据读取、WCDB 及相关桌面能力。
+- [alingalingling/Akasha-WeChat](https://github.com/alingalingling/Akasha-WeChat)：微信机器人接入、OneBot v11、反向 WebSocket 和消息发送相关思路与实现。
+
+感谢以上项目作者及所有相关开源组件的贡献者。

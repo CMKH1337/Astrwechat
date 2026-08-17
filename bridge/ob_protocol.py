@@ -15,6 +15,10 @@ import os
 import tempfile
 import time
 import logging
+import mimetypes
+import re
+import shutil
+from email.message import Message
 from urllib.parse import unquote, urlparse
 
 import requests
@@ -213,18 +217,103 @@ def _resolve_local_file(file_val: str) -> str | None:
     return None
 
 
-async def _send_file_operation(contact: str, file_val: str) -> bool:
-    file_path = _resolve_local_file(file_val)
-    if not file_path:
-        log.warning(f"[OB11] File is missing or inaccessible to Bridge: {file_val}")
-        return False
+_MAX_REMOTE_FILE_BYTES = 1024 * 1024 * 1024
 
-    sent = await asyncio.to_thread(state.sender_instance.send_file, contact, file_path)
-    if sent:
-        log.info(f"[OB11] File sent to {contact}: {os.path.basename(file_path)}")
+
+def _remote_file_name(response: requests.Response, file_url: str) -> str:
+    """Choose a safe local filename from HTTP headers or the final URL."""
+    file_name = ""
+    content_disposition = response.headers.get("Content-Disposition", "")
+    if content_disposition:
+        message = Message()
+        message["Content-Disposition"] = content_disposition
+        file_name = message.get_filename() or ""
+
+    if not file_name:
+        file_name = os.path.basename(unquote(urlparse(response.url or file_url).path))
+    if not file_name:
+        file_name = "downloaded-file"
+
+    file_name = os.path.basename(file_name.replace("\\", "/"))
+    file_name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", file_name).strip(" .")
+    if not file_name or file_name in (".", ".."):
+        file_name = "downloaded-file"
+
+    if "." not in file_name:
+        content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip()
+        extension = mimetypes.guess_extension(content_type) if content_type else None
+        if extension:
+            file_name += extension
+    return file_name
+
+
+def _download_remote_file(file_url: str) -> tuple[str, str]:
+    """Download one HTTP(S) file and return (file_path, temporary_directory)."""
+    temp_dir = tempfile.mkdtemp(prefix="astrwechat-file-")
+    try:
+        with requests.get(
+            file_url,
+            stream=True,
+            allow_redirects=True,
+            timeout=(10, 300),
+            headers={"User-Agent": "AstrWeChat-Bridge/1.0"},
+        ) as response:
+            response.raise_for_status()
+            content_length = response.headers.get("Content-Length")
+            if content_length and int(content_length) > _MAX_REMOTE_FILE_BYTES:
+                raise ValueError("remote file exceeds the 1 GiB limit")
+
+            file_name = _remote_file_name(response, file_url)
+            file_path = os.path.join(temp_dir, file_name)
+            downloaded = 0
+            with open(file_path, "wb") as output:
+                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    if not chunk:
+                        continue
+                    downloaded += len(chunk)
+                    if downloaded > _MAX_REMOTE_FILE_BYTES:
+                        raise ValueError("remote file exceeds the 1 GiB limit")
+                    output.write(chunk)
+
+        if not os.path.isfile(file_path) or os.path.getsize(file_path) == 0:
+            raise ValueError("downloaded file is empty")
+        return file_path, temp_dir
+    except Exception:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise
+
+
+async def _send_file_operation(contact: str, file_val: str) -> bool:
+    temporary_dir = None
+    scheme = urlparse(file_val).scheme.lower()
+
+    if scheme in ("http", "https"):
+        try:
+            log.info(f"[OB11] Downloading remote file: {file_val}")
+            file_path, temporary_dir = await asyncio.to_thread(_download_remote_file, file_val)
+            log.info(
+                f"[OB11] Remote file downloaded: {os.path.basename(file_path)} "
+                f"({os.path.getsize(file_path)} bytes)"
+            )
+        except Exception as e:
+            log.warning(f"[OB11] Remote file download failed: {file_val}: {e}")
+            return False
     else:
-        log.error(f"[OB11] File send failed: {contact}: {os.path.basename(file_path)}")
-    return bool(sent)
+        file_path = _resolve_local_file(file_val)
+        if not file_path:
+            log.warning(f"[OB11] File is missing or inaccessible to Bridge: {file_val}")
+            return False
+
+    try:
+        sent = await asyncio.to_thread(state.sender_instance.send_file, contact, file_path)
+        if sent:
+            log.info(f"[OB11] File sent to {contact}: {os.path.basename(file_path)}")
+        else:
+            log.error(f"[OB11] File send failed: {contact}: {os.path.basename(file_path)}")
+        return bool(sent)
+    finally:
+        if temporary_dir:
+            await asyncio.to_thread(shutil.rmtree, temporary_dir, True)
 
 
 async def _process_send_request(request: dict):

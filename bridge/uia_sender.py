@@ -35,6 +35,10 @@ class BaseSender:
     def send_image(self, contact: str, image_path: str) -> bool:
         raise NotImplementedError
 
+    def send_file(self, contact: str, file_path: str) -> bool:
+        raise NotImplementedError
+
+
 class UiaSender(BaseSender):
     """
     纯键盘模拟的微信消息发送器。
@@ -318,3 +322,66 @@ class UiaSender(BaseSender):
             log.error(f"复制图片到剪贴板失败: {e}")
             raise
 
+    # ================================================================
+    # Send files through the Windows file-drop clipboard format
+    # ================================================================
+
+    def send_file(self, contact: str, file_path: str) -> bool:
+        """Paste and send one local file through the active WeChat window."""
+        with self._lock:
+            if not self._ready:
+                return False
+
+            abs_path = os.path.abspath(file_path)
+            if not os.path.isfile(abs_path):
+                log.error(f"File does not exist: {abs_path}")
+                return False
+
+            try:
+                if not self._ensure_window():
+                    return False
+                self._activate()
+                auto = self._auto
+
+                if self.search_enabled and contact and contact != self._last_contact:
+                    if not self._switch_contact(contact):
+                        log.error(f"[UIA failed] file -> {contact}: contact switch failed")
+                        return False
+                    self._last_contact = contact
+
+                time.sleep(random.uniform(0.3, 0.8))
+                self._copy_file_to_clipboard(abs_path)
+                time.sleep(0.5)
+
+                auto.SendKeys('{Ctrl}v')
+                file_size_mb = os.path.getsize(abs_path) / (1024 * 1024)
+                time.sleep(min(1.0 + file_size_mb * 0.05, 5.0))
+
+                auto.SendKeys('{Enter}')
+                log.info(f"[UIA ok] file -> {contact}: {os.path.basename(abs_path)}")
+                return True
+
+            except Exception as e:
+                log.error(f"[UIA failed] file -> {contact}: {e}")
+                return False
+
+    def _copy_file_to_clipboard(self, path: str):
+        """Copy one file as a Windows FileDropList clipboard item."""
+        env = os.environ.copy()
+        env["WEFLOW_FILE_TO_SEND"] = os.path.abspath(path)
+        script = (
+            "Add-Type -AssemblyName System.Windows.Forms;"
+            "$path = [Environment]::GetEnvironmentVariable('WEFLOW_FILE_TO_SEND');"
+            "$files = New-Object System.Collections.Specialized.StringCollection;"
+            "[void]$files.Add($path);"
+            "[System.Windows.Forms.Clipboard]::SetFileDropList($files)"
+        )
+        try:
+            subprocess.run([
+                "powershell", "-NoProfile", "-STA", "-WindowStyle", "Hidden",
+                "-Command", script,
+            ], check=True, timeout=10, env=env)
+            log.debug("PowerShell copied file to clipboard")
+        except Exception as e:
+            log.error(f"Failed to copy file to clipboard: {e}")
+            raise

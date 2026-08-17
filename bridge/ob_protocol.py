@@ -15,6 +15,7 @@ import os
 import tempfile
 import time
 import logging
+from urllib.parse import unquote, urlparse
 
 import requests
 
@@ -177,12 +178,69 @@ async def _send_image_operation(contact: str, file_val: str) -> bool:
                 pass
 
 
+def _resolve_local_file(file_val: str) -> str | None:
+    """Resolve a file path that is accessible from the Bridge process."""
+    file_val = os.path.expandvars(os.path.expanduser(str(file_val or "").strip()))
+    if not file_val:
+        return None
+
+    if file_val.lower().startswith("file://"):
+        parsed = urlparse(file_val)
+        file_val = unquote(parsed.path)
+        if parsed.netloc:
+            file_val = f"//{parsed.netloc}{file_val}"
+        elif os.name == "nt" and len(file_val) >= 3 and file_val[0] == "/" and file_val[2] == ":":
+            file_val = file_val[1:]
+
+    candidates = []
+    if os.path.isabs(file_val):
+        candidates.append(file_val)
+    if config.ASTRBOT_ATTACHMENTS:
+        candidates.extend([
+            os.path.join(config.ASTRBOT_ATTACHMENTS, file_val),
+            os.path.join(config.ASTRBOT_ATTACHMENTS, "wechat_files", file_val),
+        ])
+
+    for candidate in candidates:
+        resolved = os.path.abspath(candidate)
+        if os.path.isfile(resolved):
+            return resolved
+    return None
+
+
+async def _send_file_operation(contact: str, file_val: str) -> bool:
+    file_path = _resolve_local_file(file_val)
+    if not file_path:
+        log.warning(f"[OB11] File is missing or inaccessible to Bridge: {file_val}")
+        return False
+
+    sent = await asyncio.to_thread(state.sender_instance.send_file, contact, file_path)
+    if sent:
+        log.info(f"[OB11] File sent to {contact}: {os.path.basename(file_path)}")
+    else:
+        log.error(f"[OB11] File send failed: {contact}: {os.path.basename(file_path)}")
+    return bool(sent)
+
+
 async def _process_send_request(request: dict):
-    """处理一整个 send_* 请求；同一请求的消息段不会和其他请求交错。"""
+    """Process one queued send request without interleaving its operations."""
     action = request["action"]
     params = request["params"]
     contact = request["contact"]
     echo = request.get("echo")
+
+    if action in ("upload_private_file", "upload_group_file"):
+        file_val = str(params.get("file", "")).strip()
+        log.info(
+            f"[OB11] Start file send: {action} echo={echo} "
+            f"contact={contact} file={os.path.basename(file_val)}"
+        )
+        if not file_val:
+            log.warning(f"[OB11] Skip empty file request: {action} echo={echo} contact={contact}")
+            return
+        await _send_file_operation(contact, file_val)
+        return
+
     operations = _coalesce_message_operations(params.get("message", []))
 
     log.info(
@@ -227,6 +285,21 @@ async def _handle_ob_api(data: dict):
         })
         log.info(
             f"[OB11] 已进入发送队列: {action} echo={echo} "
+            f"contact={contact} pending={queue.qsize()}"
+        )
+    elif action in ("upload_private_file", "upload_group_file"):
+        is_group = action == "upload_group_file"
+        target_id = params.get("group_id" if is_group else "user_id", 0)
+        contact = state._ob_id_to_contact.get(target_id, str(target_id))
+        queue = _ensure_send_queue()
+        await queue.put({
+            "action": action,
+            "params": params,
+            "echo": echo,
+            "contact": contact,
+        })
+        log.info(
+            f"[OB11] File queued: {action} echo={echo} "
             f"contact={contact} pending={queue.qsize()}"
         )
     else:

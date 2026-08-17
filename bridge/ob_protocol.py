@@ -123,6 +123,11 @@ def _coalesce_message_operations(message) -> list[tuple[str, str]]:
             file_val = str(seg_data.get("file", "")).strip()
             if file_val:
                 operations.append(("image", file_val))
+        elif seg_type == "file":
+            flush_text()
+            file_val = str(seg_data.get("file", "")).strip()
+            if file_val:
+                operations.append(("file", file_val))
         elif seg_type == "face":
             flush_text()
             operations.append(("text", "[表情]"))
@@ -261,6 +266,8 @@ async def _process_send_request(request: dict):
                 log.error(f"[OB11] 文字发送失败: {contact}: {value[:50]}")
         elif operation_type == "image":
             await _send_image_operation(contact, value)
+        elif operation_type == "file":
+            await _send_file_operation(contact, value)
 
 
 async def _handle_ob_api(data: dict):

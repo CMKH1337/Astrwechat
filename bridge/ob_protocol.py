@@ -61,6 +61,9 @@ async def _send_worker(queue: asyncio.Queue):
         except Exception as e:
             log.exception(f"[OB11] 发送队列处理异常: {e}")
         finally:
+            cleanup_dirs = request.get("cleanup_dirs", [])
+            if cleanup_dirs:
+                await asyncio.to_thread(_cleanup_staged_files, cleanup_dirs)
             queue.task_done()
 
 
@@ -220,6 +223,75 @@ def _resolve_local_file(file_val: str) -> str | None:
 _MAX_REMOTE_FILE_BYTES = 1024 * 1024 * 1024
 
 
+def _stage_local_file(file_val: str) -> tuple[str, str] | None:
+    """Keep a local file alive after AstrBot receives the immediate API response."""
+    scheme = urlparse(str(file_val or "")).scheme.lower()
+    if scheme in ("http", "https"):
+        return None
+
+    source_path = _resolve_local_file(file_val)
+    if not source_path:
+        return None
+
+    temp_dir = tempfile.mkdtemp(prefix="astrwechat-stage-")
+    staged_path = os.path.join(temp_dir, os.path.basename(source_path))
+    try:
+        try:
+            os.link(source_path, staged_path)
+            method = "hardlink"
+        except OSError:
+            shutil.copy2(source_path, staged_path)
+            method = "copy"
+        log.info(
+            f"[OB11] Local file staged before API response ({method}): "
+            f"{os.path.basename(staged_path)}"
+        )
+        return staged_path, temp_dir
+    except Exception:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise
+
+
+def _stage_local_files_in_params(action: str, params: dict) -> list[str]:
+    """Replace local OneBot file values with Bridge-owned staged paths."""
+    cleanup_dirs = []
+    file_slots = []
+
+    if action in ("upload_private_file", "upload_group_file"):
+        file_slots.append((params, "file"))
+    else:
+        message = params.get("message", [])
+        if isinstance(message, dict):
+            message = [message]
+        if isinstance(message, list):
+            for segment in message:
+                if not isinstance(segment, dict) or str(segment.get("type", "")) != "file":
+                    continue
+                data = segment.get("data", {})
+                if isinstance(data, dict):
+                    file_slots.append((data, "file"))
+
+    for container, key in file_slots:
+        file_val = str(container.get(key, "")).strip()
+        if not file_val:
+            continue
+        try:
+            staged = _stage_local_file(file_val)
+        except Exception as e:
+            log.warning(f"[OB11] Failed to stage local file before API response: {file_val}: {e}")
+            continue
+        if staged:
+            staged_path, temp_dir = staged
+            container[key] = staged_path
+            cleanup_dirs.append(temp_dir)
+    return cleanup_dirs
+
+
+def _cleanup_staged_files(cleanup_dirs: list[str]):
+    for temp_dir in cleanup_dirs:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 def _remote_file_name(response: requests.Response, file_url: str) -> str:
     """Choose a safe local filename from HTTP headers or the final URL."""
     file_name = ""
@@ -366,6 +438,14 @@ async def _handle_ob_api(data: dict):
     echo = data.get("echo") if "echo" in data else None
     log.info(f"[OB11] API: {action} echo={echo}")
 
+    send_actions = (
+        "send_msg", "send_private_msg", "send_group_msg",
+        "upload_private_file", "upload_group_file",
+    )
+    cleanup_dirs = []
+    if action in send_actions:
+        cleanup_dirs = await asyncio.to_thread(_stage_local_files_in_params, action, params)
+
     await _send_ob_response(action, echo)
 
     if action in ("send_msg", "send_private_msg", "send_group_msg"):
@@ -378,6 +458,7 @@ async def _handle_ob_api(data: dict):
             "params": params,
             "echo": echo,
             "contact": contact,
+            "cleanup_dirs": cleanup_dirs,
         })
         log.info(
             f"[OB11] 已进入发送队列: {action} echo={echo} "
@@ -393,6 +474,7 @@ async def _handle_ob_api(data: dict):
             "params": params,
             "echo": echo,
             "contact": contact,
+            "cleanup_dirs": cleanup_dirs,
         })
         log.info(
             f"[OB11] File queued: {action} echo={echo} "

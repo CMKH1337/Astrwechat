@@ -4,7 +4,6 @@ import '../AppSlim.scss'
 export default function SettingsSlimPage() {
   const [launchAtStartup, setLaunchAtStartup] = useState(false)
   const [silentStartup, setSilentStartup] = useState(false)
-  const [notificationEnabled, setNotificationEnabled] = useState(true)
   const [logEnabled, setLogEnabled] = useState(false)
   const [version, setVersion] = useState('')
   const [saving, setSaving] = useState(false)
@@ -12,16 +11,14 @@ export default function SettingsSlimPage() {
 
   useEffect(() => {
     ;(async () => {
-      const [startup, silent, notif, log, ver] = await Promise.all([
+      const [startup, silent, log, ver] = await Promise.all([
         window.electronAPI.app.getLaunchAtStartupStatus(),
         window.electronAPI.config.get('silentStartup'),
-        window.electronAPI.config.get('notificationEnabled'),
         window.electronAPI.config.get('logEnabled'),
         window.electronAPI.app.getVersion(),
       ])
       setLaunchAtStartup(startup?.enabled === true)
       setSilentStartup(Boolean(silent))
-      setNotificationEnabled(notif !== false)
       setLogEnabled(Boolean(log))
       if (ver) setVersion(String(ver))
     })()
@@ -32,7 +29,6 @@ export default function SettingsSlimPage() {
     try {
       await window.electronAPI.app.setLaunchAtStartup(launchAtStartup)
       await window.electronAPI.config.set('silentStartup', silentStartup)
-      await window.electronAPI.config.set('notificationEnabled', notificationEnabled)
       await window.electronAPI.config.set('logEnabled', logEnabled)
       setSaveMsg('已保存')
     } catch (e) {
@@ -51,7 +47,6 @@ export default function SettingsSlimPage() {
       const result = await window.electronAPI.config.clear() as any
       setLaunchAtStartup(false)
       setSilentStartup(false)
-      setNotificationEnabled(true)
       setLogEnabled(false)
       setSaveMsg(result?.success === false
         ? `重置完成，但有部分操作失败：${(result.errors || []).join('；')}`
@@ -86,19 +81,6 @@ export default function SettingsSlimPage() {
             <span className="slim-toggle__track" />
           </label>
           <span style={{ fontSize: 12, color: '#555' }}>启动时最小化到系统托盘</span>
-        </div>
-      </div>
-
-      <div className="slim-card">
-        <div className="slim-card__title">通知</div>
-
-        <div className="slim-field">
-          <label>桌面通知</label>
-          <label className="slim-toggle">
-            <input type="checkbox" checked={notificationEnabled} onChange={e => setNotificationEnabled(e.target.checked)} />
-            <span className="slim-toggle__track" />
-          </label>
-          <span style={{ fontSize: 12, color: '#555' }}>新消息桌面弹窗</span>
         </div>
       </div>
 

@@ -61,9 +61,9 @@ export default function LogPage() {
 
   const colorMap: Record<string, string> = {
     new: 'var(--slim-accent)',
-    revoke: '#fbbf24',
+    revoke: 'var(--slim-accent-strong)',
     info: '#555',
-    error: '#f87171',
+    error: '#222',
   }
 
   const labelMap: Record<string, string> = {
@@ -115,7 +115,7 @@ export default function LogPage() {
 
       <div className="slim-log-panel" style={{
         flex: 1,
-        background: '#050505',
+        background: '#ffffff',
         border: '1px solid var(--slim-border)',
         borderRadius: 8,
         overflow: 'auto',
@@ -124,15 +124,15 @@ export default function LogPage() {
         padding: '12px 16px',
       }}>
         {filtered.length === 0 && (
-          <div style={{ color: '#444', textAlign: 'center', marginTop: 40 }}>
+          <div style={{ color: '#777', textAlign: 'center', marginTop: 40 }}>
             暂无日志 {polling ? '' : '— 勾选「自动刷新」实时查看'}
           </div>
         )}
         {filtered.map((entry, i) => (
           <div key={i} style={{ display: 'flex', gap: 12, marginBottom: 4, lineHeight: 1.6 }}>
-            {entry.time && <span style={{ color: '#444', flexShrink: 0 }}>{entry.time}</span>}
+            {entry.time && <span style={{ color: '#888', flexShrink: 0 }}>{entry.time}</span>}
             <span style={{ color: colorMap[entry.type], flexShrink: 0, minWidth: 40 }}>[{labelMap[entry.type]}]</span>
-            <span style={{ color: 'var(--slim-text)', wordBreak: 'break-all' }}>{entry.text}</span>
+            <span style={{ color: '#222', wordBreak: 'break-all' }}>{entry.text}</span>
           </div>
         ))}
         <div ref={bottomRef} />

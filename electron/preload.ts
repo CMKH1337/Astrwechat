@@ -77,6 +77,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   app: {
     getDownloadsPath: () => ipcRenderer.invoke('app:getDownloadsPath'),
     getVersion: () => ipcRenderer.invoke('app:getVersion'),
+    getRuntimeSeconds: () => ipcRenderer.invoke('app:getRuntimeSeconds'),
     getLaunchAtStartupStatus: () => ipcRenderer.invoke('app:getLaunchAtStartupStatus'),
     setLaunchAtStartup: (enabled: boolean) => ipcRenderer.invoke('app:setLaunchAtStartup', enabled),
     checkForUpdates: () => ipcRenderer.invoke('app:checkForUpdates'),
@@ -276,6 +277,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getAllImageMessages: (sessionId: string) => ipcRenderer.invoke('chat:getAllImageMessages', sessionId),
     getMessageDates: (sessionId: string) => ipcRenderer.invoke('chat:getMessageDates', sessionId),
     getMessageDateCounts: (sessionId: string) => ipcRenderer.invoke('chat:getMessageDateCounts', sessionId),
+    getMessageDateCountsBatch: (sessionIds: string[]) => ipcRenderer.invoke('chat:getMessageDateCountsBatch', sessionIds),
     getResourceMessages: (options?: {
       sessionId?: string
       types?: Array<'image' | 'video' | 'voice' | 'file'>

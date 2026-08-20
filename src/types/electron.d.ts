@@ -358,6 +358,7 @@ export interface ElectronAPI {
   app: {
     getDownloadsPath: () => Promise<string>
     getVersion: () => Promise<string>
+    getRuntimeSeconds: () => Promise<number>
     getLaunchAtStartupStatus: () => Promise<{ enabled: boolean; supported: boolean; reason?: string }>
     setLaunchAtStartup: (enabled: boolean) => Promise<{
       success: boolean
@@ -765,6 +766,7 @@ export interface ElectronAPI {
     }>
     getMessageDates: (sessionId: string) => Promise<{ success: boolean; dates?: string[]; error?: string }>
     getMessageDateCounts: (sessionId: string) => Promise<{ success: boolean; counts?: Record<string, number>; error?: string }>
+    getMessageDateCountsBatch: (sessionIds: string[]) => Promise<{ success: boolean; data?: Record<string, Record<string, number>>; error?: string }>
     getResourceMessages: (options?: {
       sessionId?: string
       types?: Array<'image' | 'video' | 'voice' | 'file'>

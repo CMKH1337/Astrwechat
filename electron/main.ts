@@ -1912,6 +1912,10 @@ function registerIpcHandlers() {
     return appVersion
   })
 
+  ipcMain.handle('app:getRuntimeSeconds', async () => {
+    return Math.max(0, Math.floor(process.uptime()))
+  })
+
   ipcMain.handle('app:getLaunchAtStartupStatus', async () => {
     return getLaunchAtStartupStatus()
   })
@@ -2674,6 +2678,9 @@ function registerIpcHandlers() {
   })
   ipcMain.handle('chat:getMessageDateCounts', async (_, sessionId: string) => {
     return chatService.getMessageDateCounts(sessionId)
+  })
+  ipcMain.handle('chat:getMessageDateCountsBatch', async (_, sessionIds: string[]) => {
+    return chatService.getMessageDateCountsBatch(sessionIds)
   })
 
   ipcMain.handle('chat:getResourceMessages', async (_, options?: {

@@ -10213,6 +10213,25 @@ class ChatService {
     }
   }
 
+  async getMessageDateCountsBatch(sessionIds: string[]): Promise<{ success: boolean; data?: Record<string, Record<string, number>>; error?: string }> {
+    try {
+      const connectResult = await this.ensureConnected()
+      if (!connectResult.success) {
+        return { success: false, error: connectResult.error || '数据库未连接' }
+      }
+      const normalizedSessionIds = Array.from(new Set((sessionIds || []).map(id => String(id || '').trim()).filter(Boolean)))
+      if (normalizedSessionIds.length === 0) return { success: true, data: {} }
+      const result = await wcdbService.getSessionMessageDateCountsBatch(normalizedSessionIds)
+      if (!result.success || !result.data) {
+        return { success: false, error: result.error || '批量查询每日消息数失败' }
+      }
+      return { success: true, data: result.data }
+    } catch (error) {
+      console.error('[ChatService] 批量获取每日消息数失败:', error)
+      return { success: false, error: String(error) }
+    }
+  }
+
   async getMyFootprintStats(
     beginTimestamp: number,
     endTimestamp: number,

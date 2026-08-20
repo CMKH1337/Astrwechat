@@ -1,11 +1,11 @@
 # AstrWeChat
 
 <p align="center">
-  <img src="public/icon.png" alt="AstrWeChat" width="256" height="256">
+  <img src="public/icon.png" alt="AstrWeChat" width="128" height="128">
 </p>
 
 <p align="center">
-  面向 AstrBot 的本地微信消息连接器
+  给 AstrBot 的本地微信消息连接器
 </p>
 
 <p align="center">

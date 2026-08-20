@@ -103,7 +103,7 @@ function MainLayout() {
           </header>
           <div className="slim-page-body">
             <Routes>
-              <Route path="/" element={<Navigate to="/connect" replace />} />
+              <Route path="/" element={<Navigate to="/stats" replace />} />
               <Route path="/stats" element={<StatsPage />} />
               <Route path="/connect" element={<ConnectPage onConnected={setDbConnected} />} />
               <Route path="/api" element={<ApiPage dbConnected={dbConnected} />} />

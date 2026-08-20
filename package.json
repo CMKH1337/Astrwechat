@@ -156,7 +156,8 @@
             "${arch}/**/*"
           ]
         }
-      ]
+      ],
+      "requestedExecutionLevel": "requireAdministrator"
     },
     "linux": {
       "icon": "public/icon.png",
@@ -211,7 +212,7 @@
       "installerIcon": "public/icon.ico",
       "uninstallerIcon": "public/icon.ico",
       "installerHeaderIcon": "public/icon.ico",
-      "perMachine": false,
+      "perMachine": true,
       "allowElevation": true,
       "installerSidebar": null,
       "uninstallerSidebar": null

@@ -4,6 +4,12 @@ ManifestDPIAware true
 !include "WordFunc.nsh"
 !include "nsDialogs.nsh"
 
+; 安装目录名与主程序文件名解耦：`WeFlow.exe` 保持 WCDB 兼容，安装根目录使用 `astrwechat`。
+!ifdef APP_FILENAME
+  !undef APP_FILENAME
+!endif
+!define APP_FILENAME astrwechat
+
 !macro customInit
   ; 设置 DPI 感知
   System::Call 'USER32::SetProcessDPIAware()'
@@ -11,10 +17,10 @@ ManifestDPIAware true
 
 ; 在安装开始前修正安装目录
 !macro preInit
-  ; 如果安装目录不以 AstrWeChat 结尾，自动追加
+  ; 如果安装目录不以 astrwechat 结尾，自动追加
   ${WordFind} "$INSTDIR" "\" "-1" $R0
-  ${If} $R0 != "AstrWeChat"
-    StrCpy $INSTDIR "$INSTDIR\AstrWeChat"
+  ${If} $R0 != "astrwechat"
+    StrCpy $INSTDIR "$INSTDIR\astrwechat"
   ${EndIf}
 !macroend
 

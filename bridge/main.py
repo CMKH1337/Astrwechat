@@ -188,6 +188,21 @@ def _apply_config(new_cfg: dict):
     cfg.BUFFER_SECONDS = new_cfg.get("buffer_seconds", cfg.BUFFER_SECONDS)
     cfg.GROUP_REPLY_MODE = new_cfg.get("group_reply_mode", cfg.GROUP_REPLY_MODE)
     state.group_reply_mode = cfg.GROUP_REPLY_MODE
+    cfg.ACTIVE_REPLY_ENABLED = bool(new_cfg.get("active_reply_enabled", cfg.ACTIVE_REPLY_ENABLED))
+    cfg.ACTIVE_REPLY_METHOD = str(new_cfg.get("active_reply_method", cfg.ACTIVE_REPLY_METHOD) or cfg.ACTIVE_REPLY_METHOD)
+    try:
+        cfg.ACTIVE_REPLY_PROBABILITY = min(1.0, max(0.0, float(new_cfg.get("active_reply_probability", cfg.ACTIVE_REPLY_PROBABILITY))))
+    except (TypeError, ValueError):
+        pass
+    try:
+        cfg.ACTIVE_REPLY_CONTEXT_COUNT = min(50, max(0, int(new_cfg.get("active_reply_context_count", cfg.ACTIVE_REPLY_CONTEXT_COUNT))))
+    except (TypeError, ValueError):
+        pass
+    cfg.ACTIVE_REPLY_WHITELIST = [
+        str(item).strip().casefold()
+        for item in (new_cfg.get("active_reply_whitelist", cfg.ACTIVE_REPLY_WHITELIST) or [])
+        if str(item).strip()
+    ]
     cfg.ASTRBOT_OB_URL = new_cfg.get("astrbot_ob_url", cfg.ASTRBOT_OB_URL)
     emit_log("配置已更新")
 

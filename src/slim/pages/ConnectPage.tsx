@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { WxidInfo } from '../../types/electron'
 import '../AppSlim.scss'
 
 interface Props {
@@ -9,6 +10,10 @@ export default function ConnectPage({ onConnected }: Props) {
   const [dbPath, setDbPath] = useState('')
   const [decryptKey, setDecryptKey] = useState('')
   const [wxid, setWxid] = useState('')
+  const [wxidOptions, setWxidOptions] = useState<WxidInfo[]>([])
+  const [wxidScanning, setWxidScanning] = useState(false)
+  const [wxidScanMessage, setWxidScanMessage] = useState('')
+  const [wxidPickerOpen, setWxidPickerOpen] = useState(false)
   const [status, setStatus] = useState<'idle' | 'testing' | 'ok' | 'err'>('idle')
   const [statusMsg, setStatusMsg] = useState('')
   const [autoDetecting, setAutoDetecting] = useState(false)
@@ -17,6 +22,68 @@ export default function ConnectPage({ onConnected }: Props) {
   const [imageKeyFetching, setImageKeyFetching] = useState(false)
   const [imageKeyProgress, setImageKeyProgress] = useState('')
   const connectingRef = useRef(false)
+  const wxidScanRequestRef = useRef(0)
+  const wxidPickerRef = useRef<HTMLDivElement>(null)
+
+  const scanWxidDirectories = async (path: string) => {
+    const normalizedPath = path.trim()
+    if (!normalizedPath) {
+      wxidScanRequestRef.current += 1
+      setWxidScanning(false)
+      setWxidPickerOpen(false)
+      setWxidOptions([])
+      setWxidScanMessage('')
+      return
+    }
+
+    const requestId = ++wxidScanRequestRef.current
+    setWxidScanning(true)
+    setWxidPickerOpen(false)
+    setWxidOptions([])
+    setWxidScanMessage('正在扫描微信账号目录...')
+
+    try {
+      const result = await window.electronAPI.dbPath.scanWxids(normalizedPath)
+      if (requestId !== wxidScanRequestRef.current) return
+
+      const options = Array.isArray(result) ? result : []
+      setWxidOptions(options)
+      setWxidScanMessage(options.length > 0
+        ? '已发现 ' + options.length + ' 个微信账号，可从下拉框选择'
+        : '未发现可用的微信账号目录，可继续手动填写微信 ID')
+
+      // 只有当前没有填写 ID 时才自动填入唯一账号，避免覆盖用户的手动输入。
+      if (!wxid.trim() && options.length === 1) {
+        setWxid(options[0].wxid)
+      }
+    } catch (error) {
+      if (requestId !== wxidScanRequestRef.current) return
+      setWxidOptions([])
+      setWxidScanMessage('扫描微信账号目录失败，可继续手动填写微信 ID')
+      console.warn('扫描微信账号目录失败:', error)
+    } finally {
+      if (requestId === wxidScanRequestRef.current) setWxidScanning(false)
+    }
+  }
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!wxidPickerRef.current?.contains(event.target as Node)) {
+        setWxidPickerOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [])
+
+  // 数据目录填写完成或切换后自动扫描账号目录。使用短暂防抖，避免用户输入路径时频繁触发 IPC。
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void scanWxidDirectories(dbPath)
+    }, 300)
+    return () => window.clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbPath])
 
   // 启动时读取已保存的配置
   useEffect(() => {
@@ -288,7 +355,39 @@ export default function ConnectPage({ onConnected }: Props) {
             onChange={e => setWxid(e.target.value)}
             placeholder="wxid_xxxxxxxx"
           />
+          <div className="slim-wxid-picker" ref={wxidPickerRef}>
+            <button
+              type="button"
+              className="slim-wxid-picker__button"
+              onClick={() => setWxidPickerOpen(open => !open)}
+              disabled={wxidScanning || wxidOptions.length === 0}
+              aria-label="展开已扫描的微信 ID"
+              aria-expanded={wxidPickerOpen}
+            >
+              <span aria-hidden="true">▾</span>
+            </button>
+            {wxidPickerOpen && wxidOptions.length > 0 && (
+              <div className="slim-wxid-picker__menu" role="listbox" aria-label="已扫描的微信 ID">
+                {wxidOptions.map(option => (
+                  <button
+                    key={option.wxid}
+                    type="button"
+                    className={'slim-wxid-picker__option' + (wxid === option.wxid ? ' is-selected' : '')}
+                    onClick={() => {
+                      setWxid(option.wxid)
+                      setWxidPickerOpen(false)
+                    }}
+                  >
+                    {option.wxid}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
+        {(wxidScanning || wxidScanMessage) && (
+          <div className="slim-field__hint">{wxidScanMessage}</div>
+        )}
 
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 }}>
           <button
@@ -326,7 +425,7 @@ export default function ConnectPage({ onConnected }: Props) {
           style={{ marginTop: 12 }}
           onClick={() => window.electronAPI.shell.openExternal('https://github.com/hicccc77/WeFlow')}
         >
-          查看文档
+          访问 WeFlow 仓库
         </button>
       </div>
     </div>

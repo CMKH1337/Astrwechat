@@ -12,7 +12,9 @@ AI 服务：AstrBot 通过 aiocqhttp (OneBot v11) 接入
 """
 
 # 共享状态：所有模块通过 import state 访问这些变量
+import hashlib
 import threading
+import unicodedata
 from typing import Optional
 
 # ============ 状态控制 ============
@@ -63,8 +65,23 @@ def set_ob_connected(connected: bool):
 
 
 def _wxid_to_int(wxid: str) -> int:
-    """将微信 wxid 映射为稳定的整数 ID。"""
-    return abs(hash(wxid)) % (2**31)
+    """Map a stable identity to a deterministic OneBot numeric ID.
+
+    Python's built-in hash is randomized per process, so it must not be used for
+    IDs that AstrBot stores as administrator UIDs.
+    """
+    identity = unicodedata.normalize("NFKC", str(wxid or "").strip()).casefold()
+    if not identity:
+        return 1
+
+    # Keep the result in the signed 31-bit range commonly used by OneBot clients.
+    digest = hashlib.blake2s(identity.encode("utf-8"), digest_size=8).digest()
+    return (int.from_bytes(digest, "big") % (2**31 - 1)) + 1
+
+
+def _group_to_int(group_id: str) -> int:
+    """Map a group session to a stable ID in a separate namespace."""
+    return _wxid_to_int(f"group:{group_id}")
 
 
 # ============ 桥接实例 / 发送器 ============

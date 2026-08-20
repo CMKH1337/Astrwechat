@@ -19,6 +19,11 @@ interface BridgeConfig {
   bot_wxid: string
   buffer_seconds: number
   group_reply_mode: string
+  active_reply_enabled: boolean
+  active_reply_method: string
+  active_reply_probability: number
+  active_reply_context_count: number
+  active_reply_whitelist: string[]
   astrbot_attachments: string
 }
 
@@ -34,6 +39,7 @@ export default function BridgePage() {
   const [saveMsg, setSaveMsg] = useState('')
   const [autoScroll, setAutoScroll] = useState(true)
   const [nicknamesInput, setNicknamesInput] = useState('')
+  const [whitelistInput, setWhitelistInput] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -42,7 +48,13 @@ export default function BridgePage() {
     window.electronAPI.bridge.getLogs().then((l: string[]) => setLogs(l)).catch(() => {})
     window.electronAPI.bridge.getConfig().then((r: any) => {
       if (r?.success && r.config) {
-        setConfig({ ...DEFAULT_CONFIG, ...r.config })
+        setConfig({
+          ...DEFAULT_CONFIG,
+          ...r.config,
+          active_reply_whitelist: Array.isArray(r.config.active_reply_whitelist)
+            ? r.config.active_reply_whitelist
+            : []
+        })
         setNicknamesInput((r.config.bot_nicknames || []).join('\n'))
       }
     }).catch(() => {})
@@ -106,6 +118,26 @@ export default function BridgePage() {
     }
   }
 
+  const addWhitelistEntries = () => {
+    const entries = whitelistInput
+      .split(/[\s,?]+/)
+      .map(s => s.trim())
+      .filter(Boolean)
+    if (!entries.length) return
+    setConfig(prev => ({
+      ...prev,
+      active_reply_whitelist: Array.from(new Set([...(prev.active_reply_whitelist || []), ...entries]))
+    }))
+    setWhitelistInput('')
+  }
+
+  const removeWhitelistEntry = (entry: string) => {
+    setConfig(prev => ({
+      ...prev,
+      active_reply_whitelist: (prev.active_reply_whitelist || []).filter(item => item !== entry)
+    }))
+  }
+
   const handleSaveConfig = async () => {
     setSaving(true)
     const merged = {
@@ -125,10 +157,10 @@ export default function BridgePage() {
   }
 
   const logColor = (line: string) => {
-    if (line.includes('[ERROR]')) return '#f87171'
-    if (line.includes('[WARNING]') || line.includes('[WARN]')) return '#fbbf24'
-    if (line.includes('✅') || line.includes('已连接') || line.includes('正常')) return 'var(--slim-accent)'
-    return 'var(--slim-text)'
+    if (line.includes('[ERROR]')) return '#333'
+    if (line.includes('[WARNING]') || line.includes('[WARN]')) return '#666'
+    if (line.includes('✅') || line.includes('已连接') || line.includes('正常')) return 'var(--slim-accent-strong)'
+    return '#222'
   }
 
   return (
@@ -179,10 +211,10 @@ export default function BridgePage() {
             </button>
           </div>
           <div className="slim-log-panel" style={{
-            flex: 1, background: '#050505', border: '1px solid var(--slim-border)', borderRadius: 8,
+            flex: 1, background: '#ffffff', border: '1px solid var(--slim-border)', borderRadius: 8,
             overflow: 'auto', fontFamily: 'monospace', fontSize: 12, padding: '10px 14px'
           }}>
-            {logs.length === 0 && <div style={{ color: '#444', textAlign: 'center', marginTop: 30 }}>暂无日志，启动 AstrWeChat 后显示</div>}
+            {logs.length === 0 && <div style={{ color: '#777', textAlign: 'center', marginTop: 30 }}>暂无日志，启动 AstrWeChat 后显示</div>}
             {logs.map((line, i) => (
               <div key={i} style={{ color: logColor(line), marginBottom: 3, lineHeight: 1.6, wordBreak: 'break-all' }}>{line}</div>
             ))}
@@ -224,10 +256,109 @@ export default function BridgePage() {
                 placeholder="每行一个昵称（用于过滤自身消息和检测 @ 提及）"
                 rows={3}
                 style={{
-                  flex: 1, background: '#050505', border: '1px solid var(--slim-border)', borderRadius: 6,
+                  flex: 1, background: '#f8f8f8', border: '1px solid #e6e8f0', borderRadius: 10,
                   color: 'var(--slim-text)', fontSize: 13, padding: '8px 10px', resize: 'vertical', outline: 'none'
                 }}
               />
+            </div>
+          </div>
+
+          <div className="slim-card">
+            <div className="slim-card__title">主动回复</div>
+            <div className="slim-field">
+              <label>主动回复</label>
+              <label className="slim-toggle">
+                <input
+                  type="checkbox"
+                  checked={config.active_reply_enabled}
+                  onChange={e => setConfig(p => ({ ...p, active_reply_enabled: e.target.checked }))}
+                />
+                <span className="slim-toggle__track" />
+              </label>
+              <span style={{ fontSize: 12, color: '#555' }}>按概率将普通消息推送给 AstrBot</span>
+            </div>
+            <div className="slim-field">
+              <label>主动回复方法</label>
+              <select
+                value={config.active_reply_method}
+                onChange={e => setConfig(p => ({ ...p, active_reply_method: e.target.value }))}
+                style={{ flex: 1, height: 34, background: '#f8f8f8', border: '1px solid #e6e8f0', borderRadius: 10, color: 'var(--slim-text)', fontSize: 13, padding: '0 10px' }}
+              >
+                <option value="possibility_reply">possibility_reply</option>
+                <option value="poisson_sampling">泊松事件采样（Poisson Sampling）</option>
+              </select>
+            </div>
+            <div className="slim-field">
+              <label>
+                回复概率
+                <span style={{ display: 'block', fontSize: 11, color: '#555', marginTop: 3 }}>0.0-1.0 之间的数值</span>
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={config.active_reply_probability}
+                onChange={e => setConfig(p => ({ ...p, active_reply_probability: Number(e.target.value) }))}
+                style={{ flex: 1, accentColor: 'var(--slim-accent)' }}
+              />
+              <input
+                type="number"
+                min={0}
+                max={1}
+                step={0.01}
+                value={config.active_reply_probability}
+                onChange={e => setConfig(p => ({ ...p, active_reply_probability: Math.min(1, Math.max(0, Number(e.target.value) || 0)) }))}
+                style={{ maxWidth: 80 }}
+              />
+            </div>
+            <div className="slim-field">
+              <label>
+                群聊上下文条数
+                <span style={{ display: 'block', fontSize: 11, color: '#555', marginTop: 3 }}>随机推送时附带的最近消息数量</span>
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={50}
+                step={1}
+                value={config.active_reply_context_count}
+                onChange={e => setConfig(p => ({ ...p, active_reply_context_count: Math.min(50, Math.max(0, Number(e.target.value) || 0)) }))}
+                style={{ maxWidth: 80 }}
+              />
+              <span style={{ fontSize: 12, color: '#555' }}>条（0 表示不附带上下文）</span>
+            </div>
+            <div className="slim-field" style={{ alignItems: 'flex-start' }}>
+              <label style={{ paddingTop: 8 }}>主动回复白名单</label>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    type="text"
+                    value={whitelistInput}
+                    onChange={e => setWhitelistInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addWhitelistEntries() } }}
+                    placeholder="输入会话 ID，可用空格或逗号分隔"
+                    style={{ flex: 1 }}
+                  />
+                  <button className="slim-btn slim-btn--secondary" onClick={addWhitelistEntries}>添加更多</button>
+                </div>
+                {(config.active_reply_whitelist || []).length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {config.active_reply_whitelist.map(entry => (
+                      <button
+                        key={entry}
+                        className="slim-btn slim-btn--secondary"
+                        onClick={() => removeWhitelistEntry(entry)}
+                        title="点击移除"
+                        style={{ height: 26, padding: '0 8px', fontSize: 11 }}
+                      >
+                        {entry} ×
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <span style={{ fontSize: 12, color: '#555' }}>为空时不启用白名单过滤。可使用 /sid 获取会话 ID。</span>
+              </div>
             </div>
           </div>
 
@@ -238,7 +369,7 @@ export default function BridgePage() {
               <select
                 value={config.group_reply_mode}
                 onChange={e => setConfig(p => ({ ...p, group_reply_mode: e.target.value }))}
-                style={{ flex: 1, height: 34, background: '#050505', border: '1px solid var(--slim-border)', borderRadius: 6, color: 'var(--slim-text)', fontSize: 13, padding: '0 10px' }}
+                style={{ flex: 1, height: 34, background: '#f8f8f8', border: '1px solid #e6e8f0', borderRadius: 10, color: 'var(--slim-text)', fontSize: 13, padding: '0 10px' }}
               >
                 <option value="mention">仅响应 @Bot</option>
                 <option value="all">响应所有消息</option>

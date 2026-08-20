@@ -40,6 +40,7 @@ interface MessagePushPayload {
   avatarUrl?: string
   sourceName: string
   senderUsername?: string
+  mentionedBot?: boolean
   groupName?: string
   content: string | null
   appMsgKind?: string
@@ -796,6 +797,7 @@ class MessagePushService {
         groupName,
         sourceName,
         senderUsername: message.senderUsername || undefined,
+        mentionedBot: this.messageMentionsCurrentBot(message) || undefined,
         content,
         appMsgKind,
         fileName: inferredFileName,
@@ -1436,6 +1438,32 @@ class MessagePushService {
       default:
         return cleanOfficialPrefix(normalizeTextContent(message.parsedContent || message.rawContent) || null)
     }
+  }
+
+  private messageMentionsCurrentBot(message: Message): boolean {
+    const myWxid = String(this.configService.getMyWxidCleaned() || '').trim().toLowerCase()
+    if (!myWxid) return false
+
+    const source = [message.rawContent, message.content, message.parsedContent]
+      .map((value) => String(value || ''))
+      .join('\n')
+      .toLowerCase()
+    if (!source.includes('atuserlist')) return false
+
+    const atUserListMatches = source.matchAll(/<atuserlist[^>]*>([\s\S]*?)<\/atuserlist>/gi)
+    for (const match of atUserListMatches) {
+      const inner = String(match[1] || '').replace(/<!\[cdata\[|\]\]>/gi, '')
+      const tokens = inner
+        .split(/[,\s;|]+/g)
+        .map((token) => token.trim().replace(/^@+/, '').replace(/^['"]+|['"]+$/g, ''))
+        .filter(Boolean)
+      if (tokens.some((token) => token === myWxid || token.startsWith(`${myWxid}_`))) return true
+    }
+
+    // Some WeChat builds serialize atuserlist as JSON or escaped text instead
+    // of XML. If the current wxid is present in that field, treat it as a hit.
+    const atField = source.indexOf('atuserlist')
+    return atField >= 0 && source.slice(atField, atField + 500).includes(myWxid)
   }
 
   private async resolveGroupSourceName(chatroomId: string, message: Message, session: ChatSession): Promise<string> {

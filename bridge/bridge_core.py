@@ -10,8 +10,10 @@
 
 import json
 import logging
+import math
 import os
 import queue
+import random
 import re
 import threading
 import time
@@ -71,6 +73,8 @@ class WeFlowBridge:
         WeFlow SSE 推送不含 @ 结构字段，只能从 content 文本检测。
         """
         content = data.get("content", "")
+        if data.get("mentionedBot") is True or data.get("isMentioned") is True:
+            return True
         if not content:
             return False
 
@@ -87,6 +91,112 @@ class WeFlowBridge:
             log.debug(f"⚠️ content 以@开头但未匹配昵称: content={content[:40]!r} nicknames={config.BOT_NICKNAMES}")
 
         return False
+
+    @staticmethod
+    def _slash_command_text(content):
+        """Return a normalized slash command, or an empty string."""
+        text = str(content or "").lstrip()
+        return text if text.startswith("/") else ""
+
+    def _should_push_active_reply(self, data):
+        """Apply the optional probability/whitelist gate to ordinary messages."""
+        if not config.ACTIVE_REPLY_ENABLED:
+            return True
+
+        session_id = str(data.get("sessionId") or data.get("talkerId") or "").strip().casefold()
+        whitelist = config.ACTIVE_REPLY_WHITELIST
+        if whitelist and session_id not in whitelist:
+            return False
+
+        if config.ACTIVE_REPLY_METHOD == "poisson_sampling":
+            # Treat the configured value as a bounded Poisson event rate ?. Keep
+            # the slider endpoints intuitive: 0 never triggers and 1 always does.
+            if config.ACTIVE_REPLY_PROBABILITY >= 1.0:
+                return True
+            trigger_probability = 1.0 - math.exp(-config.ACTIVE_REPLY_PROBABILITY)
+            return random.random() < trigger_probability
+        if config.ACTIVE_REPLY_METHOD == "possibility_reply":
+            return random.random() < config.ACTIVE_REPLY_PROBABILITY
+        return True
+
+    def _remember_group_message(self, data):
+        """Remember a group message and return the previous context window."""
+        session_id = str(data.get("sessionId") or data.get("talkerId") or "").strip()
+        if not session_id:
+            return []
+
+        try:
+            context_count = min(50, max(0, int(config.ACTIVE_REPLY_CONTEXT_COUNT)))
+        except (TypeError, ValueError, AttributeError):
+            context_count = 5
+
+        content = str(data.get("content") or "").strip()
+        sender = str(
+            data.get("senderName")
+            or data.get("sender")
+            or data.get("sourceName")
+            or "unknown member"
+        ).strip()
+        line = f"{sender}: {content[:500]}" if content else sender
+
+        with self.buffer_lock:
+            history = self.chat_histories[session_id]
+            previous = list(history[-context_count:]) if context_count else []
+            history.append(line)
+            # Keep a bounded cache even when the UI context count is lowered later.
+            if len(history) > 50:
+                del history[:-50]
+        return previous
+
+    def _push_slash_command(self, data, command_text, is_group):
+        """Push a slash command to AstrBot immediately and bind its reply route."""
+        session_id = str(data.get("sessionId") or data.get("talkerId") or "").strip()
+        source_name = str(data.get("sourceName") or data.get("talkerName") or "unknown").strip()
+        sender_identity = self._group_sender_identity(data) if is_group else (session_id or source_name)
+        user_id = state._wxid_to_int(sender_identity)
+
+        if is_group:
+            group_name_raw = str(data.get("groupName") or data.get("talkerName") or session_id).strip()
+            group_name = re.sub(r'\s*\(\d+\)\s*$', '', group_name_raw).strip() or session_id
+            group_id = state._group_to_int(session_id or group_name)
+            sender_name = str(
+                data.get("senderName") or data.get("sender") or data.get("sourceName") or source_name
+            ).strip()
+            event = make_message_event(
+                "group",
+                user_id,
+                [{"type": "text", "data": {"text": command_text}}],
+                group_id=group_id,
+                group_name=group_name,
+                nickname=sender_name,
+            )
+            # Register before push_event: AstrBot may answer as soon as it receives
+            # the event, and that answer must go back to this original group.
+            state._ob_id_to_contact[group_id] = group_name
+            route_label = group_name
+        else:
+            contact = source_name or session_id
+            event = make_message_event(
+                "private",
+                user_id,
+                [{"type": "text", "data": {"text": command_text}}],
+                nickname=source_name or contact,
+            )
+            state._ob_id_to_contact[user_id] = contact
+            route_label = contact
+
+        sent = push_event(event)
+        if sent:
+            log.info(
+                f"[command] pushed immediately: session={session_id or route_label} "
+                f"user_id={user_id} text={command_text[:80]}"
+            )
+        else:
+            log.warning(
+                f"[command] AstrBot is offline: session={session_id or route_label} "
+                f"text={command_text[:80]}"
+            )
+        return sent
 
     @staticmethod
     def _is_file_event(data):
@@ -112,7 +222,7 @@ class WeFlowBridge:
 
     @staticmethod
     def _group_sender_identity(data):
-        """优先使用 wxid；旧版 SSE 缺字段时才退回显示名。"""
+        """Return a stable member identity; never include the group session ID."""
         value = (
             data.get("senderUsername")
             or data.get("senderId")
@@ -121,6 +231,8 @@ class WeFlowBridge:
             or data.get("sourceName")
             or ""
         )
+        # senderUsername is normally the wxid. Display names are only a fallback
+        # for legacy SSE payloads that do not expose the member wxid.
         return str(value).strip().casefold()
 
     def _pending_group_file_key(self, data):
@@ -253,10 +365,29 @@ class WeFlowBridge:
         session_id_data = data.get("sessionId", "") or source_name
         group_name_raw = data.get("groupName", "")
         is_group = (data.get("sessionType", "") == "group") or bool(group_name_raw) or "@chatroom" in session_id_data
+        context_messages = self._remember_group_message(data) if is_group else []
+
+        # Slash commands bypass mention filtering and the normal merge timer. This
+        # keeps command parsing intact and lets AstrBot reply to the same session.
+        command_text = self._slash_command_text(content)
+        if command_text:
+            self._push_slash_command(data, command_text, is_group)
+            return
+
+        # Explicit @ mentions are intentional requests and must not be lost to the
+        # active-reply probability gate. Only unmentioned ordinary messages use the
+        # probability/whitelist filter.
+        is_explicit_mention = is_group and self._is_mentioned(data)
+        if not is_explicit_mention and not self._should_push_active_reply(data):
+            log.debug(
+                f"[active-reply] skipped by probability/whitelist: "
+                f"session={session_id_data} content={str(content)[:60]}"
+            )
+            return
 
         if content == "[图片]":
             # 图片消息（mention 模式下需 @ 才处理）
-            if is_group and state.group_reply_mode == "mention" and not self._is_mentioned(data):
+            if is_group and state.group_reply_mode == "mention" and not config.ACTIVE_REPLY_ENABLED and not self._is_mentioned(data):
                 # 先图后文：暂存图片，等后续同人发 @ 文字时合并
                 self._pending_mention_images[session_id_data] = {"data": data, "time": time.time()}
                 log.info(f"📸 暂存图片，等待关联 @ 文字 (session={session_id_data})")
@@ -267,7 +398,7 @@ class WeFlowBridge:
 
         if content in ("[动画表情]", "[表情]"):
             # 表情包消息（mention 模式下需 @ 才处理）
-            if is_group and state.group_reply_mode == "mention" and not self._is_mentioned(data):
+            if is_group and state.group_reply_mode == "mention" and not config.ACTIVE_REPLY_ENABLED and not self._is_mentioned(data):
                 # 先图后文：暂存表情，等后续同人发 @ 文字时合并
                 self._pending_mention_images[session_id_data] = {"data": data, "time": time.time()}
                 log.info(f"😀 暂存表情，等待关联 @ 文字 (session={session_id_data})")
@@ -286,7 +417,7 @@ class WeFlowBridge:
             )
             # mention 模式下文件卡片本身无法携带 @，先按“群+发送者”暂存，
             # 等同一成员随后发 @ 指令后再把路径和指令合并给 AstrBot。
-            if is_group and state.group_reply_mode == "mention" and not self._is_mentioned(data):
+            if is_group and state.group_reply_mode == "mention" and not config.ACTIVE_REPLY_ENABLED and not self._is_mentioned(data):
                 self._cache_pending_group_file(data)
                 return
             threading.Thread(
@@ -310,9 +441,14 @@ class WeFlowBridge:
             return
 
         sender_in_group = data.get("senderName", "") or data.get("sender", "") or data.get("sourceName", "")
+        sender_identity = self._group_sender_identity(data) if is_group else session_id_data
 
         if is_group:
-            if state.group_reply_mode == "mention" and not self._is_mentioned(data):
+            if (
+                state.group_reply_mode == "mention"
+                and not config.ACTIVE_REPLY_ENABLED
+                and not self._is_mentioned(data)
+            ):
                 log.debug(f"⏭️ mention 模式跳过（未检测到 @）: data keys={list(data.keys())} nickname={config.BOT_NICKNAMES} content={content[:40]}")
                 return
             group_raw = group_name_raw or source_name
@@ -323,8 +459,10 @@ class WeFlowBridge:
 
         if is_group and state.group_reply_mode == "batch":
             buffer_key = f"__batch__{base_name}"
-        elif is_group and sender_in_group:
-            buffer_key = f"{session_id_data}_{sender_in_group}"
+        elif is_group and sender_identity:
+            # Keep buffers isolated by group + member, while deriving OneBot
+            # user_id from the member only so it is shared across sessions.
+            buffer_key = f"{session_id_data}_{sender_identity}"
         else:
             buffer_key = session_id_data
 
@@ -341,9 +479,27 @@ class WeFlowBridge:
                     "source_name": source_name,
                     "group_name": base_name if is_group else "",
                     "sender_in_group": sender_in_group if is_group else "",
+                    "sender_identity": sender_identity,
                     "session_id_data": session_id_data,
+                    "active_reply_context": bool(
+                        is_group and config.ACTIVE_REPLY_ENABLED and not is_explicit_mention
+                    ),
+                    "explicit_mention": bool(is_explicit_mention),
+                    "context_messages": context_messages if is_group else [],
                 }
             entry = self.pending_buffers[buffer_key]
+            # Refresh the context snapshot whenever the same buffer receives a
+            # newer message. This keeps the window rotating instead of freezing
+            # at the first messages seen after Bridge startup.
+            if (
+                is_group
+                and config.ACTIVE_REPLY_ENABLED
+                and not is_explicit_mention
+                and not entry.get("explicit_mention")
+            ):
+                entry["active_reply_context"] = True
+                entry["context_messages"] = context_messages
+
             if is_group and state.group_reply_mode == "batch" and sender_in_group:
                 entry["messages"].append(f'成员"{sender_in_group}"在群"{base_name}"中对你说：{content}')
             else:
@@ -357,7 +513,7 @@ class WeFlowBridge:
 
                 # 检查是否有暂存的图片（先图后文场景）
                 has_pending_image = False
-                if is_group and state.group_reply_mode == "mention":
+                if is_group and state.group_reply_mode == "mention" and not config.ACTIVE_REPLY_ENABLED:
                     cached = self._pending_mention_images.pop(session_id_data, None)
                     if cached and time.time() - cached["time"] < 15:
                         has_pending_image = True
@@ -400,15 +556,13 @@ class WeFlowBridge:
         combined = "\n".join(msgs)
         log.info(f"推送 {len(msgs)} 条消息 [{'群' if is_group else '私'}|{contact}]")
 
-        # 构建 OneBot 事件（user_id 要用发言人身份，不能用群 sessionId）
-        if is_group:
-            sender_wxid = entry.get("session_id_data", "") + "_" + (entry.get("sender_in_group", "") or entry.get("source_name", ""))
-        else:
-            sender_wxid = entry.get("session_id_data", sender_id)
+        # Build the OneBot event using sender identity only; group session IDs must not affect user_id.
+        sender_identity = entry.get("sender_identity") or entry.get("sender_in_group") or entry.get("source_name") or sender_id
+        sender_wxid = sender_identity if is_group else entry.get("session_id_data", sender_id)
         user_id = state._wxid_to_int(sender_wxid)
 
         if is_group:
-            group_id = state._wxid_to_int(entry.get("group_name", contact))
+            group_id = state._group_to_int(entry.get("session_id_data") or entry.get("group_name", contact))
             sender_name = entry.get("sender_in_group", "") or entry.get("source_name", "未知")
 
             if state.group_reply_mode == "batch":
@@ -425,8 +579,26 @@ class WeFlowBridge:
 
                 formatted = clean_text
 
+            context_messages = entry.get("context_messages", [])
+            context_attached_count = 0
+            if entry.get("active_reply_context") and context_messages:
+                context_attached_count = len(context_messages)
+                formatted = (
+                    "[\u6700\u8fd1\u7fa4\u804a\u4e0a\u4e0b\u6587]\n"
+                    + "\n".join(context_messages)
+                    + "\n[\u5f53\u524d\u6d88\u606f]\n"
+                    + formatted
+                )
+            if entry.get("active_reply_context"):
+                log.info(
+                    f"[active-reply] accepted group message; context_attached={context_attached_count}"
+                )
+
             # 消息段：mention 模式带 at 机器人标记，all/batch 不带
-            if state.group_reply_mode == "mention":
+            # Keep an internal @ marker for AstrBot. The marker is not sent to
+            # WeChat; it preserves the trigger semantics used by the old group
+            # event format, including active-reply events.
+            if state.group_reply_mode == "mention" or config.ACTIVE_REPLY_ENABLED:
                 msg_segments = [
                     {"type": "at", "data": {"qq": str(state._self_id_int)}},
                     {"type": "text", "data": {"text": f" {formatted}"}},
@@ -447,7 +619,7 @@ class WeFlowBridge:
 
         # 记录 user_id → contact 映射，供 API 回复时查找
         if is_group:
-            group_id = state._wxid_to_int(entry.get("group_name", contact))
+            group_id = state._group_to_int(entry.get("session_id_data") or entry.get("group_name", contact))
             state._ob_id_to_contact[group_id] = contact
         else:
             state._ob_id_to_contact[user_id] = contact
@@ -498,7 +670,7 @@ class WeFlowBridge:
                                 content = data.get("content", "")
                                 log.info(f"📩 群消息 [{data.get('sourceName','')}]: {content[:60]}")
                                 if state.group_reply_mode == "mention":
-                                    mentioned = any(f"@{n}" in content for n in config.BOT_NICKNAMES)
+                                    mentioned = self._is_mentioned(data)
                                     log.info(f"   @={mentioned}")
                             else:
                                 log.info(f"📩 收到: {data.get('sourceName','')} → {data.get('content','')[:50]}")
@@ -936,6 +1108,8 @@ class WeFlowBridge:
         is_group = bool(group_name) or "@chatroom" in session_id
         display_text = self._resolve_file_message_text(data)
 
+        sender_identity = self._group_sender_identity(data) if is_group else session_id
+        sender_key = f"{session_id}_{sender_identity}" if is_group else session_id
         self.add_text_to_buffer(
             session_id,
             source_name,
@@ -943,7 +1117,8 @@ class WeFlowBridge:
             session_id,
             display_text,
             is_group,
-            session_id,
+            sender_key,
+            sender_identity=sender_identity,
         )
 
     def process_image_message(self, data):
@@ -964,6 +1139,8 @@ class WeFlowBridge:
         else:
             log.warning("⚠️ 图片下载或编码失败，仅转发图片占位文本")
 
+        sender_identity = self._group_sender_identity(data) if is_group else session_id
+        sender_key = f"{session_id}_{sender_identity}" if is_group else talker_id
         self.add_text_to_buffer(
             talker_id,
             source_name,
@@ -971,8 +1148,9 @@ class WeFlowBridge:
             session_id,
             "[图片]",
             is_group,
-            talker_id,
+            sender_key,
             [image_segment] if image_segment else [],
+            sender_identity=sender_identity,
         )
 
     def process_emoji_message(self, data):
@@ -997,14 +1175,20 @@ class WeFlowBridge:
             else:
                 log.warning("😀 表情包下载或编码失败，仅转发表情占位文本")
 
+            sender_identity = self._group_sender_identity(data) if is_group else session_id
+            sender_key = f"{session_id}_{sender_identity}" if is_group else talker_id
             self.add_text_to_buffer(talker_id, source_name, group_name,
-                                    session_id, content, is_group, talker_id,
-                                    [image_segment] if image_segment else [])
+                                    session_id, content, is_group, sender_key,
+                                    [image_segment] if image_segment else [],
+                                    sender_identity=sender_identity)
         except Exception as e:
             log.warning(f"😀 表情包处理异常: {e}")
             # 异常时也保底发送原文
+            sender_identity = self._group_sender_identity(data) if is_group else session_id
+            sender_key = f"{session_id}_{sender_identity}" if is_group else talker_id
             self.add_text_to_buffer(talker_id, source_name, group_name,
-                                    session_id, content, is_group, talker_id)
+                                    session_id, content, is_group, sender_key,
+                                    sender_identity=sender_identity)
 
     def _inject_cached_image(self, image_data, buffer_key, version):
         """下载缓存图片并在缓冲计时器到期前注入 OneBot 图片段。"""
@@ -1030,7 +1214,7 @@ class WeFlowBridge:
 
     def add_text_to_buffer(self, session_id_data, source_name, group_name,
                            session_id, content, is_group, sender_key,
-                           media_segments=None):
+                           media_segments=None, sender_identity=None):
         """通用：将一段文本直接加入缓冲队列（供表情/图片等异步处理完后调用）"""
         with self.buffer_lock:
             buffer_key = sender_key
@@ -1047,6 +1231,7 @@ class WeFlowBridge:
                     "session_id_data": session_id,
                     "group_name": group_name if is_group else "",
                     "sender_in_group": source_name if is_group else "",
+                    "sender_identity": sender_identity or (source_name if is_group else session_id),
                 }
             entry = self.pending_buffers[buffer_key]
             entry["messages"].append(content)

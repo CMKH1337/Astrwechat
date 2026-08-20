@@ -431,6 +431,28 @@ async def _process_send_request(request: dict):
             await _send_file_operation(contact, value)
 
 
+def _normalize_ob_target_id(value):
+    """Normalize numeric OneBot IDs so string and integer forms share a route."""
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return value
+
+
+def _resolve_reply_contact(action: str, params: dict):
+    """Resolve send_msg/send_* to the original private or group session route."""
+    message_type = str(params.get("message_type") or "").strip().lower()
+    has_group_id = params.get("group_id") not in (None, "", 0, "0")
+    is_group = action in ("send_group_msg", "upload_group_file") or (
+        action == "send_msg" and (message_type == "group" or has_group_id)
+    )
+    target_key = "group_id" if is_group else "user_id"
+    raw_target_id = params.get(target_key, 0)
+    target_id = _normalize_ob_target_id(raw_target_id)
+    contact = state._ob_id_to_contact.get(target_id, str(raw_target_id))
+    return is_group, target_id, contact
+
+
 async def _handle_ob_api(data: dict):
     """响应 OneBot API；发送类请求进入 FIFO 队列后立即返回。"""
     action = str(data.get("action", ""))
@@ -449,9 +471,7 @@ async def _handle_ob_api(data: dict):
     await _send_ob_response(action, echo)
 
     if action in ("send_msg", "send_private_msg", "send_group_msg"):
-        is_group = action == "send_group_msg"
-        target_id = params.get("group_id" if is_group else "user_id", 0)
-        contact = state._ob_id_to_contact.get(target_id, str(target_id))
+        is_group, target_id, contact = _resolve_reply_contact(action, params)
         queue = _ensure_send_queue()
         await queue.put({
             "action": action,
@@ -465,9 +485,7 @@ async def _handle_ob_api(data: dict):
             f"contact={contact} pending={queue.qsize()}"
         )
     elif action in ("upload_private_file", "upload_group_file"):
-        is_group = action == "upload_group_file"
-        target_id = params.get("group_id" if is_group else "user_id", 0)
-        contact = state._ob_id_to_contact.get(target_id, str(target_id))
+        is_group, target_id, contact = _resolve_reply_contact(action, params)
         queue = _ensure_send_queue()
         await queue.put({
             "action": action,

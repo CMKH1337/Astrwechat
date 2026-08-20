@@ -1,4 +1,4 @@
-﻿{
+{
   "weflow_base_url": "http://127.0.0.1:5031",
   "access_token": "",
   "astrbot_ob_url": "ws://127.0.0.1:11229/ws",
@@ -6,5 +6,10 @@
   "bot_wxid": "",
   "buffer_seconds": 0,
   "group_reply_mode": "mention",
-  "astrbot_attachments": ""
+  "active_reply_enabled": false,
+  "active_reply_method": "possibility_reply",
+  "active_reply_probability": 0.1,
+  "active_reply_whitelist": [],
+  "astrbot_attachments": "",
+  "active_reply_context_count": 5
 }

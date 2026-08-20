@@ -28,6 +28,21 @@ BOT_WXID = config.get("bot_wxid", "")
 BUFFER_SECONDS = config.get("buffer_seconds", 5)
 WEB_PORT = config.get("web_port", 8766)
 GROUP_REPLY_MODE = config.get("group_reply_mode", "mention")  # "mention" / "all"
+ACTIVE_REPLY_ENABLED = bool(config.get("active_reply_enabled", False))
+ACTIVE_REPLY_METHOD = str(config.get("active_reply_method", "possibility_reply") or "possibility_reply")
+try:
+    ACTIVE_REPLY_PROBABILITY = min(1.0, max(0.0, float(config.get("active_reply_probability", 0.1))))
+except (TypeError, ValueError):
+    ACTIVE_REPLY_PROBABILITY = 0.1
+try:
+    ACTIVE_REPLY_CONTEXT_COUNT = min(50, max(0, int(config.get("active_reply_context_count", 5))))
+except (TypeError, ValueError):
+    ACTIVE_REPLY_CONTEXT_COUNT = 5
+ACTIVE_REPLY_WHITELIST = [
+    str(item).strip().casefold()
+    for item in (config.get("active_reply_whitelist", []) or [])
+    if str(item).strip()
+]
 
 # AstrBot OneBot 连接配置（bridge 作为 WebSocket 客户端连 AstrBot 的 aiocqhttp 服务端）
 ASTRBOT_OB_URL = config.get("astrbot_ob_url", "ws://127.0.0.1:19777")

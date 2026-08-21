@@ -22,7 +22,6 @@ interface BridgeConfig {
   active_reply_enabled: boolean
   active_reply_method: string
   active_reply_probability: number
-  active_reply_context_count: number
   active_reply_whitelist: string[]
   astrbot_attachments: string
 }
@@ -311,22 +310,6 @@ export default function BridgePage() {
                 onChange={e => setConfig(p => ({ ...p, active_reply_probability: Math.min(1, Math.max(0, Number(e.target.value) || 0)) }))}
                 style={{ maxWidth: 80 }}
               />
-            </div>
-            <div className="slim-field">
-              <label>
-                群聊上下文条数
-                <span style={{ display: 'block', fontSize: 11, color: '#555', marginTop: 3 }}>随机推送时附带的最近消息数量</span>
-              </label>
-              <input
-                type="number"
-                min={0}
-                max={50}
-                step={1}
-                value={config.active_reply_context_count}
-                onChange={e => setConfig(p => ({ ...p, active_reply_context_count: Math.min(50, Math.max(0, Number(e.target.value) || 0)) }))}
-                style={{ maxWidth: 80 }}
-              />
-              <span style={{ fontSize: 12, color: '#555' }}>条（0 表示不附带上下文）</span>
             </div>
             <div className="slim-field" style={{ alignItems: 'flex-start' }}>
               <label style={{ paddingTop: 8 }}>主动回复白名单</label>

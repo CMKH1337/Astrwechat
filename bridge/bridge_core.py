@@ -18,7 +18,6 @@ import re
 import threading
 import time
 import base64
-from collections import defaultdict
 from datetime import datetime
 
 import requests
@@ -42,7 +41,6 @@ class WeFlowBridge:
         self.start_timestamp = int(time.time())
         self.pending_buffers = {}
         self.buffer_lock = threading.Lock()
-        self.chat_histories = defaultdict(list)
         self.contact_map = {}
         self._sse_session = None
         self._recent_seen = {}
@@ -118,35 +116,6 @@ class WeFlowBridge:
         if config.ACTIVE_REPLY_METHOD == "possibility_reply":
             return random.random() < config.ACTIVE_REPLY_PROBABILITY
         return True
-
-    def _remember_group_message(self, data):
-        """Remember a group message and return the previous context window."""
-        session_id = str(data.get("sessionId") or data.get("talkerId") or "").strip()
-        if not session_id:
-            return []
-
-        try:
-            context_count = min(50, max(0, int(config.ACTIVE_REPLY_CONTEXT_COUNT)))
-        except (TypeError, ValueError, AttributeError):
-            context_count = 5
-
-        content = str(data.get("content") or "").strip()
-        sender = str(
-            data.get("senderName")
-            or data.get("sender")
-            or data.get("sourceName")
-            or "unknown member"
-        ).strip()
-        line = f"{sender}: {content[:500]}" if content else sender
-
-        with self.buffer_lock:
-            history = self.chat_histories[session_id]
-            previous = list(history[-context_count:]) if context_count else []
-            history.append(line)
-            # Keep a bounded cache even when the UI context count is lowered later.
-            if len(history) > 50:
-                del history[:-50]
-        return previous
 
     def _push_slash_command(self, data, command_text, is_group):
         """Push a slash command to AstrBot immediately and bind its reply route."""
@@ -365,8 +334,6 @@ class WeFlowBridge:
         session_id_data = data.get("sessionId", "") or source_name
         group_name_raw = data.get("groupName", "")
         is_group = (data.get("sessionType", "") == "group") or bool(group_name_raw) or "@chatroom" in session_id_data
-        context_messages = self._remember_group_message(data) if is_group else []
-
         # Slash commands bypass mention filtering and the normal merge timer. This
         # keeps command parsing intact and lets AstrBot reply to the same session.
         command_text = self._slash_command_text(content)
@@ -481,25 +448,8 @@ class WeFlowBridge:
                     "sender_in_group": sender_in_group if is_group else "",
                     "sender_identity": sender_identity,
                     "session_id_data": session_id_data,
-                    "active_reply_context": bool(
-                        is_group and config.ACTIVE_REPLY_ENABLED and not is_explicit_mention
-                    ),
-                    "explicit_mention": bool(is_explicit_mention),
-                    "context_messages": context_messages if is_group else [],
                 }
             entry = self.pending_buffers[buffer_key]
-            # Refresh the context snapshot whenever the same buffer receives a
-            # newer message. This keeps the window rotating instead of freezing
-            # at the first messages seen after Bridge startup.
-            if (
-                is_group
-                and config.ACTIVE_REPLY_ENABLED
-                and not is_explicit_mention
-                and not entry.get("explicit_mention")
-            ):
-                entry["active_reply_context"] = True
-                entry["context_messages"] = context_messages
-
             if is_group and state.group_reply_mode == "batch" and sender_in_group:
                 entry["messages"].append(f'成员"{sender_in_group}"在群"{base_name}"中对你说：{content}')
             else:
@@ -578,21 +528,6 @@ class WeFlowBridge:
                         clean_text = clean_text.replace(at_pattern, "").strip()
 
                 formatted = clean_text
-
-            context_messages = entry.get("context_messages", [])
-            context_attached_count = 0
-            if entry.get("active_reply_context") and context_messages:
-                context_attached_count = len(context_messages)
-                formatted = (
-                    "[\u6700\u8fd1\u7fa4\u804a\u4e0a\u4e0b\u6587]\n"
-                    + "\n".join(context_messages)
-                    + "\n[\u5f53\u524d\u6d88\u606f]\n"
-                    + formatted
-                )
-            if entry.get("active_reply_context"):
-                log.info(
-                    f"[active-reply] accepted group message; context_attached={context_attached_count}"
-                )
 
             # 消息段：mention 模式带 at 机器人标记，all/batch 不带
             # Keep an internal @ marker for AstrBot. The marker is not sent to

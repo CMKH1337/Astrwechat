@@ -68,4 +68,14 @@ ManifestDPIAware true
   ${Else}
     DetailPrint "Visual C++ Redistributable 已安装"
   ${EndIf}
+
+  ; 明确使用安装目录中的 icon.ico 创建桌面快捷方式，避免 Windows 从 WeFlow.exe
+  ; 按安装路径缓存旧图标。目标仍然指向实际的 WeFlow.exe。
+  ${If} ${FileExists} "$newDesktopLink"
+    Delete "$newDesktopLink"
+  ${EndIf}
+  CreateShortCut "$newDesktopLink" "$INSTDIR\${APP_EXECUTABLE_FILENAME}" "" "$INSTDIR\resources\icon.ico" 0 "" "" "${APP_DESCRIPTION}"
+  ClearErrors
+  WinShell::SetLnkAUMI "$newDesktopLink" "${APP_ID}"
+  System::Call 'Shell32::SHChangeNotify(i 0x8000000, i 0, i 0, i 0)'
 !macroend

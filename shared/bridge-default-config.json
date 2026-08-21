@@ -10,6 +10,5 @@
   "active_reply_method": "possibility_reply",
   "active_reply_probability": 0.1,
   "active_reply_whitelist": [],
-  "astrbot_attachments": "",
-  "active_reply_context_count": 5
+  "astrbot_attachments": ""
 }

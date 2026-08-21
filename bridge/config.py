@@ -34,10 +34,6 @@ try:
     ACTIVE_REPLY_PROBABILITY = min(1.0, max(0.0, float(config.get("active_reply_probability", 0.1))))
 except (TypeError, ValueError):
     ACTIVE_REPLY_PROBABILITY = 0.1
-try:
-    ACTIVE_REPLY_CONTEXT_COUNT = min(50, max(0, int(config.get("active_reply_context_count", 5))))
-except (TypeError, ValueError):
-    ACTIVE_REPLY_CONTEXT_COUNT = 5
 ACTIVE_REPLY_WHITELIST = [
     str(item).strip().casefold()
     for item in (config.get("active_reply_whitelist", []) or [])

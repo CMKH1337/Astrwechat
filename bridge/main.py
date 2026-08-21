@@ -194,10 +194,6 @@ def _apply_config(new_cfg: dict):
         cfg.ACTIVE_REPLY_PROBABILITY = min(1.0, max(0.0, float(new_cfg.get("active_reply_probability", cfg.ACTIVE_REPLY_PROBABILITY))))
     except (TypeError, ValueError):
         pass
-    try:
-        cfg.ACTIVE_REPLY_CONTEXT_COUNT = min(50, max(0, int(new_cfg.get("active_reply_context_count", cfg.ACTIVE_REPLY_CONTEXT_COUNT))))
-    except (TypeError, ValueError):
-        pass
     cfg.ACTIVE_REPLY_WHITELIST = [
         str(item).strip().casefold()
         for item in (new_cfg.get("active_reply_whitelist", cfg.ACTIVE_REPLY_WHITELIST) or [])

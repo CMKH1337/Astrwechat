@@ -22,6 +22,13 @@ AstrWeChat 用于读取本机微信数据、提供本地 HTTP API 和新消息�
 > [!IMPORTANT]
 > AstrWeChat 不是微信官方产品，也不是 AstrBot 官方组件。一切请在保证数据安全的情况下运行。
 
+## 特别鸣谢
+
+感谢以下仓库提供的技术支持：
+
+- [hicccc77/WeFlow](https://github.com/hicccc77/WeFlow)：微信本地数据读取、WCDB 及相关桌面能力。
+- [alingalingling/Akasha-WeChat](https://github.com/alingalingling/Akasha-WeChat)：微信机器人接入、OneBot v11、反向 WebSocket 和消息发送相关思路与实现。
+
 ## 版本
 
 | 版本 | 文件 | 使用方式 |
@@ -319,12 +326,5 @@ WeFlow.exe
 - `bridge/config.json` 是本地运行配置，不应提交到公共仓库。
 - 默认服务只监听 `127.0.0.1`。如需监听局域网地址，请设置强 Access Token 并自行配置防火墙。
 - 一键重置会停止相关服务并清除本地配置，请在操作前确认不再需要这些信息。
-
-## 致谢
-
-感谢以下仓库提供的技术支持：
-
-- [hicccc77/WeFlow](https://github.com/hicccc77/WeFlow)：微信本地数据读取、WCDB 及相关桌面能力。
-- [alingalingling/Akasha-WeChat](https://github.com/alingalingling/Akasha-WeChat)：微信机器人接入、OneBot v11、反向 WebSocket 和消息发送相关思路与实现。
 
 感谢以上项目作者及所有相关开源组件的贡献者。

@@ -130,11 +130,14 @@ def _coalesce_message_operations(message) -> list[tuple[str, str]]:
             file_val = str(seg_data.get("file", "")).strip()
             if file_val:
                 operations.append(("image", file_val))
-        elif seg_type == "file":
+        elif seg_type in ("file", "video"):
+            # AstrBot sends videos through the standard OneBot media segment.
+            # WeChat UIA uses the same file-drop path for both files and videos,
+            # but keep a distinct operation type for diagnostics and extension.
             flush_text()
-            file_val = str(seg_data.get("file", "")).strip()
+            file_val = str(seg_data.get("file") or seg_data.get("url") or "").strip()
             if file_val:
-                operations.append(("file", file_val))
+                operations.append((seg_type, file_val))
         elif seg_type == "face":
             flush_text()
             operations.append(("text", "[表情]"))
@@ -265,7 +268,7 @@ def _stage_local_files_in_params(action: str, params: dict) -> list[str]:
             message = [message]
         if isinstance(message, list):
             for segment in message:
-                if not isinstance(segment, dict) or str(segment.get("type", "")) != "file":
+                if not isinstance(segment, dict) or str(segment.get("type", "")) not in ("file", "video"):
                     continue
                 data = segment.get("data", {})
                 if isinstance(data, dict):
@@ -355,33 +358,33 @@ def _download_remote_file(file_url: str) -> tuple[str, str]:
         raise
 
 
-async def _send_file_operation(contact: str, file_val: str) -> bool:
+async def _send_file_operation(contact: str, file_val: str, media_label: str = "File") -> bool:
     temporary_dir = None
     scheme = urlparse(file_val).scheme.lower()
 
     if scheme in ("http", "https"):
         try:
-            log.info(f"[OB11] Downloading remote file: {file_val}")
+            log.info(f"[OB11] Downloading remote {media_label.lower()}: {file_val}")
             file_path, temporary_dir = await asyncio.to_thread(_download_remote_file, file_val)
             log.info(
-                f"[OB11] Remote file downloaded: {os.path.basename(file_path)} "
+                f"[OB11] Remote {media_label.lower()} downloaded: {os.path.basename(file_path)} "
                 f"({os.path.getsize(file_path)} bytes)"
             )
         except Exception as e:
-            log.warning(f"[OB11] Remote file download failed: {file_val}: {e}")
+            log.warning(f"[OB11] Remote {media_label.lower()} download failed: {file_val}: {e}")
             return False
     else:
         file_path = _resolve_local_file(file_val)
         if not file_path:
-            log.warning(f"[OB11] File is missing or inaccessible to Bridge: {file_val}")
+            log.warning(f"[OB11] {media_label} is missing or inaccessible to Bridge: {file_val}")
             return False
 
     try:
         sent = await asyncio.to_thread(state.sender_instance.send_file, contact, file_path)
         if sent:
-            log.info(f"[OB11] File sent to {contact}: {os.path.basename(file_path)}")
+            log.info(f"[OB11] {media_label} sent to {contact}: {os.path.basename(file_path)}")
         else:
-            log.error(f"[OB11] File send failed: {contact}: {os.path.basename(file_path)}")
+            log.error(f"[OB11] {media_label} send failed: {contact}: {os.path.basename(file_path)}")
         return bool(sent)
     finally:
         if temporary_dir:
@@ -429,6 +432,14 @@ async def _process_send_request(request: dict):
             await _send_image_operation(contact, value)
         elif operation_type == "file":
             await _send_file_operation(contact, value)
+        elif operation_type == "video":
+            log.info(
+                f"[OB11] 开始视频发送: contact={contact} "
+                f"source={os.path.basename(urlparse(value).path) or value}"
+            )
+            # The UIA sender transfers videos through the Windows file-drop
+            # clipboard format; WeChat recognizes an mp4 as a video attachment.
+            await _send_file_operation(contact, value, media_label="Video")
 
 
 def _normalize_ob_target_id(value):
@@ -458,7 +469,16 @@ async def _handle_ob_api(data: dict):
     action = str(data.get("action", ""))
     params = data.get("params", {}) or {}
     echo = data.get("echo") if "echo" in data else None
-    log.info(f"[OB11] API: {action} echo={echo}")
+    message = params.get("message", [])
+    if isinstance(message, dict):
+        message = [message]
+    segment_types = [
+        str(segment.get("type", ""))
+        for segment in (message if isinstance(message, list) else [])
+        if isinstance(segment, dict)
+    ]
+    segment_summary = ",".join(segment_types) or "-"
+    log.info(f"[OB11] API: {action} echo={echo} segments={segment_summary}")
 
     send_actions = (
         "send_msg", "send_private_msg", "send_group_msg",
@@ -589,5 +609,3 @@ def _decode_base64_image(b64_data: str) -> str | None:
     tmp.write(img_data)
     tmp.close()
     return tmp.name
-
-

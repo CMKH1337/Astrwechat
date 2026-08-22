@@ -1,7 +1,7 @@
 # AstrWeChat
 
 <p align="center">
-  <img src="public/icon.png" alt="AstrWeChat" width="128" height="128">
+  <img src="1.1.0/icon.png" alt="AstrWeChat" width="128" height="128">
 </p>
 
 <p align="center">

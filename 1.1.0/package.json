@@ -1,6 +1,6 @@
 {
   "name": "astrwechat",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "云原神启动器",
   "main": "dist-electron/main.js",
   "scripts": {

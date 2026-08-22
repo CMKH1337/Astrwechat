@@ -97,9 +97,18 @@ export default function ConnectPage({ onConnected }: Props) {
       if (savedKey) setDecryptKey(String(savedKey))
       if (savedWxid) setWxid(String(savedWxid))
 
-      // 如果配置完整，尝试自动连接
+      // 页面切换回来时先检查后台 WCDB 状态，避免对同一个账号重复 open。
+      const alreadyConnected = await window.electronAPI.wcdb.isConnected().catch(() => false)
+      if (alreadyConnected) {
+        setStatus('ok')
+        setStatusMsg('数据库已连接')
+        onConnected(true)
+        return
+      }
+
+      // 应用首次启动且配置完整时才自动连接。
       if (savedPath && savedKey && savedWxid) {
-        tryConnect(String(savedPath), String(savedKey), String(savedWxid), false)
+        void tryConnect(String(savedPath), String(savedKey), String(savedWxid), false)
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps

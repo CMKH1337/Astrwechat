@@ -529,6 +529,7 @@ export interface ElectronAPI {
     testConnection: (dbPath: string, hexKey: string, wxid: string) => Promise<{ success: boolean; error?: string; sessionCount?: number }>
     open: (dbPath: string, hexKey: string, wxid: string) => Promise<boolean>
     close: () => Promise<boolean>
+    isConnected: () => Promise<boolean>
 
   }
   backup: {

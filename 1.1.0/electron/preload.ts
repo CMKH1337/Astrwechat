@@ -177,6 +177,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     open: (dbPath: string, hexKey: string, wxid: string) =>
       ipcRenderer.invoke('wcdb:open', dbPath, hexKey, wxid),
     close: () => ipcRenderer.invoke('wcdb:close'),
+    isConnected: () => ipcRenderer.invoke('wcdb:isConnected'),
 
   },
 

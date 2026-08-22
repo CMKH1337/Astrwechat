@@ -2353,6 +2353,10 @@ function registerIpcHandlers() {
     }
   })
 
+  ipcMain.handle('wcdb:isConnected', async () => {
+    return wcdbService.isConnected()
+  })
+
   ipcMain.handle('wcdb:close', async () => {
     await wcdbService.close()
     return true

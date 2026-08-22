@@ -35,6 +35,7 @@ function MainLayout() {
 
   useEffect(() => {
     window.electronAPI.app.getVersion().then(setVersion).catch(() => {})
+    window.electronAPI.wcdb.isConnected().then(setDbConnected).catch(() => setDbConnected(false))
   }, [])
 
   return (

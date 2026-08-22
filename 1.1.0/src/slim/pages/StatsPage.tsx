@@ -20,9 +20,122 @@ interface TrendPoint {
   count: number
 }
 
-const PERIOD_OPTIONS = [7, 30] as const
+interface StatsSnapshot {
+  totalMessages: number
+  groupCount: number
+  groups: GroupRank[]
+  dailyCounts: Record<string, number>
+  updatedAt: number
+}
 
+interface StatsCacheEntry {
+  key: string
+  snapshot: StatsSnapshot
+}
+
+const PERIOD_OPTIONS = [7, 30] as const
 type Period = typeof PERIOD_OPTIONS[number]
+
+const STATS_CACHE_STORAGE_PREFIX = 'astrwechat:stats-cache:v1:'
+let memoryStatsCache: StatsCacheEntry | null = null
+let statsLoadInFlight: { key: string; promise: Promise<StatsSnapshot> } | null = null
+
+function getStatsCacheKey(dbPath: unknown, wxid: unknown): string {
+  return `${String(dbPath || '').trim()}::${String(wxid || '').trim()}`
+}
+
+function getPersistedStatsCache(key: string): StatsSnapshot | null {
+  if (!key || key === '::') return null
+  if (memoryStatsCache?.key === key) return memoryStatsCache.snapshot
+
+  try {
+    const raw = window.localStorage.getItem(`${STATS_CACHE_STORAGE_PREFIX}${encodeURIComponent(key)}`)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as StatsSnapshot
+    if (!parsed || !Array.isArray(parsed.groups) || !parsed.dailyCounts || !Number.isFinite(parsed.updatedAt)) return null
+    memoryStatsCache = { key, snapshot: parsed }
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function saveStatsCache(key: string, snapshot: StatsSnapshot): void {
+  memoryStatsCache = { key, snapshot }
+  if (!key || key === '::') return
+  try {
+    window.localStorage.setItem(
+      `${STATS_CACHE_STORAGE_PREFIX}${encodeURIComponent(key)}`,
+      JSON.stringify(snapshot),
+    )
+  } catch {
+    // 本地缓存失败不影响统计结果显示；内存缓存仍然有效。
+  }
+}
+
+async function loadStatsSnapshot(forceRefresh: boolean): Promise<StatsSnapshot> {
+  const [dbPath, wxid] = await Promise.all([
+    window.electronAPI.config.get('dbPath'),
+    window.electronAPI.config.get('myWxid'),
+  ])
+  const cacheKey = getStatsCacheKey(dbPath, wxid)
+
+  if (!forceRefresh) {
+    const cached = getPersistedStatsCache(cacheKey)
+    if (cached) return cached
+  }
+
+  // 页面切换或重复点击时复用同一个任务，避免同一账号并发扫描多次。
+  if (statsLoadInFlight?.key === cacheKey) return statsLoadInFlight.promise
+
+  const promise = (async () => {
+    const sessionsResult = await window.electronAPI.chat.getSessions()
+    if (!sessionsResult.success || !sessionsResult.sessions) {
+      throw new Error(sessionsResult.error || '请先连接微信数据库')
+    }
+
+    const sessions = sessionsResult.sessions as SessionLike[]
+    const sessionIds = sessions.map(session => session.username).filter(Boolean)
+    const countsResult = await window.electronAPI.chat.getSessionMessageCounts(sessionIds, {
+      // 普通进入优先使用后端已有缓存；手动刷新才强制重新扫描。
+      preferHintCache: !forceRefresh,
+      bypassSessionCache: forceRefresh,
+    })
+    const counts = countsResult.counts || {}
+    const groupsOnly = sessions.filter(session => session.username.endsWith('@chatroom'))
+
+    const mergedDates: Record<string, number> = {}
+    const datesResult = await window.electronAPI.chat.getMessageDateCountsBatch(sessionIds)
+    Object.values(datesResult.data || {}).forEach(sessionDates => {
+      Object.entries(sessionDates).forEach(([date, count]) => {
+        mergedDates[date] = (mergedDates[date] || 0) + (Number(count) || 0)
+      })
+    })
+
+    const snapshot: StatsSnapshot = {
+      totalMessages: Object.values(counts).reduce((sum, count) => sum + (Number(count) || 0), 0),
+      groupCount: groupsOnly.length,
+      groups: groupsOnly
+        .map(session => ({
+          name: session.displayName || session.username.replace('@chatroom', ''),
+          count: Number(counts[session.username] ?? session.messageCountHint ?? 0) || 0,
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 8),
+      dailyCounts: mergedDates,
+      updatedAt: Date.now(),
+    }
+    saveStatsCache(cacheKey, snapshot)
+    return snapshot
+  })()
+
+  statsLoadInFlight = { key: cacheKey, promise }
+  try {
+    return await promise
+  } finally {
+    if (statsLoadInFlight?.promise === promise) statsLoadInFlight = null
+  }
+}
 
 export default function StatsPage() {
   const [runtimeSeconds, setRuntimeSeconds] = useState(0)
@@ -36,52 +149,37 @@ export default function StatsPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   useEffect(() => {
+    let active = true
+    const syncRuntime = async () => {
+      try {
+        const runtime = await window.electronAPI.app.getRuntimeSeconds()
+        if (active) setRuntimeSeconds(Number(runtime) || 0)
+      } catch {
+        // 运行时间仅用于展示，读取失败不应阻塞统计数据。
+      }
+    }
+    void syncRuntime()
     const timer = window.setInterval(() => setRuntimeSeconds(seconds => seconds + 1), 1000)
-    return () => window.clearInterval(timer)
+    return () => {
+      active = false
+      window.clearInterval(timer)
+    }
   }, [])
 
-  const loadStats = useCallback(async () => {
+  const applySnapshot = useCallback((snapshot: StatsSnapshot) => {
+    setTotalMessages(snapshot.totalMessages)
+    setGroupCount(snapshot.groupCount)
+    setGroups(snapshot.groups)
+    setDailyCounts(snapshot.dailyCounts)
+    setLastUpdated(new Date(snapshot.updatedAt))
+  }, [])
+
+  const loadStats = useCallback(async (forceRefresh = false) => {
     setLoading(true)
     setError('')
     try {
-      const [runtime, sessionsResult] = await Promise.all([
-        window.electronAPI.app.getRuntimeSeconds(),
-        window.electronAPI.chat.getSessions(),
-      ])
-
-      setRuntimeSeconds(Number(runtime) || 0)
-      if (!sessionsResult.success || !sessionsResult.sessions) {
-        throw new Error(sessionsResult.error || '请先连接微信数据库')
-      }
-
-      const sessions = sessionsResult.sessions as SessionLike[]
-      const sessionIds = sessions.map(session => session.username).filter(Boolean)
-      const countsResult = await window.electronAPI.chat.getSessionMessageCounts(sessionIds, {
-        preferHintCache: false,
-        bypassSessionCache: true,
-      })
-      const counts = countsResult.counts || {}
-      const groupsOnly = sessions.filter(session => session.username.endsWith('@chatroom'))
-
-      setTotalMessages(Object.values(counts).reduce((sum, count) => sum + (Number(count) || 0), 0))
-      setGroupCount(groupsOnly.length)
-      setGroups(groupsOnly
-        .map(session => ({
-          name: session.displayName || session.username.replace('@chatroom', ''),
-          count: Number(counts[session.username] ?? session.messageCountHint ?? 0) || 0,
-        }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 8))
-
-      const mergedDates: Record<string, number> = {}
-      const datesResult = await window.electronAPI.chat.getMessageDateCountsBatch(sessionIds)
-      Object.values(datesResult.data || {}).forEach(sessionDates => {
-        Object.entries(sessionDates).forEach(([date, count]) => {
-          mergedDates[date] = (mergedDates[date] || 0) + (Number(count) || 0)
-        })
-      })
-      setDailyCounts(mergedDates)
-      setLastUpdated(new Date())
+      const snapshot = await loadStatsSnapshot(forceRefresh)
+      applySnapshot(snapshot)
     } catch (reason) {
       setError(String(reason).replace(/^Error:\s*/, ''))
       setTotalMessages(0)
@@ -91,10 +189,10 @@ export default function StatsPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [applySnapshot])
 
   useEffect(() => {
-    loadStats()
+    void loadStats(false)
   }, [loadStats])
 
   const trend = useMemo<TrendPoint[]>(() => {
@@ -170,7 +268,7 @@ export default function StatsPage() {
         <span className="stats-toolbar__hint">
           {lastUpdated ? `更新于 ${lastUpdated.toLocaleTimeString('zh-CN', { hour12: false })}` : '读取本地数据库统计'}
         </span>
-        <button className="slim-btn slim-btn--secondary stats-refresh" onClick={loadStats} disabled={loading}>
+        <button className="slim-btn slim-btn--secondary stats-refresh" onClick={() => void loadStats(true)} disabled={loading}>
           <RefreshCw size={14} className={loading ? 'stats-spin' : ''} />
           刷新
         </button>

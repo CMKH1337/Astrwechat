@@ -5,14 +5,7 @@
 </p>
 
 <p align="center">
-  给 AstrBot 的本地微信消息连接器
-</p>
-
-<p align="center">
-  <a href="https://github.com/CMKH1337/Astrwechat/releases/latest"><img src="https://img.shields.io/github/v/release/CMKH1337/Astrwechat?label=Release" alt="Release"></a>
-  <a href="https://github.com/CMKH1337/Astrwechat/releases"><img src="https://img.shields.io/github/downloads/CMKH1337/Astrwechat/total?label=Downloads" alt="Downloads"></a>
-  <img src="https://img.shields.io/badge/Windows-10%2B-0078D6?logo=windows" alt="Windows 10+">
-  <img src="https://img.shields.io/badge/OneBot-v11-7C3AED" alt="OneBot v11">
+  适用于 AstrBot 的本地微信消息连接器
 </p>
 
 AstrWeChat 用于读取本机微信数据、提供本地 HTTP API 和新消息推送，并通过 OneBot v11 Bridge 将微信消息接入 AstrBot。AstrBot 生成回复后，Bridge 可以借助 Windows UI Automation 将消息发送回微信。

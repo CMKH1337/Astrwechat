@@ -29,9 +29,6 @@ AstrWeChat 用于读取本机微信数据、提供本地 HTTP API 和新消息�
 | Windows 安装版 | `AstrWeChat-1.1.0--windows-amd64-Setup.exe` | 运行安装程序，根据提示完成安装 |
 | Windows 免安装版 | `AstrWeChat-1.1.0-Portable.zip` | 解压到独立目录，运行 `WeFlow.exe` |
 
-> [!NOTE]
-> 免安装版中的主程序文件名为 `WeFlow.exe`。这是 WCDB 原生组件的兼容要求，不代表软件品牌发生变化；程序界面和产品名称仍为 AstrWeChat。
-
 ## 主要功能
 
 - 自动检测微信数据目录和微信 ID

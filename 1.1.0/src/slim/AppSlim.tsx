@@ -106,7 +106,7 @@ function MainLayout() {
             <Routes>
               <Route path="/" element={<Navigate to="/stats" replace />} />
               <Route path="/stats" element={<StatsPage />} />
-              <Route path="/connect" element={<ConnectPage onConnected={setDbConnected} />} />
+              <Route path="/connect" element={<ConnectPage connected={dbConnected} onConnected={setDbConnected} />} />
               <Route path="/api" element={<ApiPage dbConnected={dbConnected} />} />
               <Route path="/bridge" element={<BridgePage />} />
               <Route path="/log" element={<LogPage />} />

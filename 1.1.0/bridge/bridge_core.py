@@ -10,7 +10,6 @@
 
 import json
 import logging
-import math
 import os
 import queue
 import random
@@ -97,7 +96,7 @@ class WeFlowBridge:
         return text if text.startswith("/") else ""
 
     def _should_push_active_reply(self, data):
-        """Apply the optional probability/whitelist gate to ordinary messages."""
+        """Apply the active-reply probability/whitelist gate to group messages."""
         if not config.ACTIVE_REPLY_ENABLED:
             return True
 
@@ -106,16 +105,7 @@ class WeFlowBridge:
         if whitelist and session_id not in whitelist:
             return False
 
-        if config.ACTIVE_REPLY_METHOD == "poisson_sampling":
-            # Treat the configured value as a bounded Poisson event rate ?. Keep
-            # the slider endpoints intuitive: 0 never triggers and 1 always does.
-            if config.ACTIVE_REPLY_PROBABILITY >= 1.0:
-                return True
-            trigger_probability = 1.0 - math.exp(-config.ACTIVE_REPLY_PROBABILITY)
-            return random.random() < trigger_probability
-        if config.ACTIVE_REPLY_METHOD == "possibility_reply":
-            return random.random() < config.ACTIVE_REPLY_PROBABILITY
-        return True
+        return random.random() < config.ACTIVE_REPLY_PROBABILITY
 
     def _push_slash_command(self, data, command_text, is_group):
         """Push a slash command to AstrBot immediately and bind its reply route."""
@@ -341,11 +331,10 @@ class WeFlowBridge:
             self._push_slash_command(data, command_text, is_group)
             return
 
-        # Explicit @ mentions are intentional requests and must not be lost to the
-        # active-reply probability gate. Only unmentioned ordinary messages use the
-        # probability/whitelist filter.
+        # 私聊是明确的一对一会话，始终推送给 AstrBot；主动回复概率只控制
+        # 群聊中未明确 @Bot 的普通消息。明确 @Bot 的群消息同样不受概率限制。
         is_explicit_mention = is_group and self._is_mentioned(data)
-        if not is_explicit_mention and not self._should_push_active_reply(data):
+        if is_group and not is_explicit_mention and not self._should_push_active_reply(data):
             log.debug(
                 f"[active-reply] skipped by probability/whitelist: "
                 f"session={session_id_data} content={str(content)[:60]}"

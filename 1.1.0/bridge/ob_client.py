@@ -11,7 +11,6 @@ import logging
 import threading
 
 import websockets
-from websockets.asyncio.server import ServerConnection, serve
 
 import state
 import config
@@ -20,27 +19,54 @@ from ob_protocol import _handle_ob_api
 log = logging.getLogger("ob11-bridge")
 
 
-def _run_ob_client():
+def _client_is_active(generation: int) -> bool:
+    """Only the newest bridge run may own the reverse WebSocket connection."""
+    return state.running and state.ob_client_generation == generation
+
+
+async def _retry_delay(generation: int, seconds: float = 5.0) -> bool:
+    """Sleep interruptibly so stop/start cannot leave an old client reconnecting."""
+    deadline = asyncio.get_running_loop().time() + seconds
+    while _client_is_active(generation):
+        remaining = deadline - asyncio.get_running_loop().time()
+        if remaining <= 0:
+            return True
+        await asyncio.sleep(min(0.1, remaining))
+    return False
+
+
+def _run_ob_client(generation: int):
     """后台线程：维护到 AstrBot 的 WebSocket 连接。"""
-    _loop = asyncio.new_event_loop()
-    state._ob_ws_loop = _loop
-    asyncio.set_event_loop(_loop)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    if state.ob_client_generation != generation:
+        loop.close()
+        return
+
+    state._ob_ws_loop = loop
     try:
-        _loop.run_until_complete(_ob_client_main())
+        loop.run_until_complete(_ob_client_main(generation))
     finally:
         try:
-            _loop.close()
+            loop.close()
         except Exception:
             pass
-        if state._ob_ws_loop is _loop:
+
+        # A superseded client must never clear a newer client's connection.
+        if state._ob_ws_loop is loop:
             state._ob_ws_loop = None
-        state._ob_ws = None
-        state.set_ob_connected(False)
+        if state.ob_client_thread is threading.current_thread():
+            state.ob_client_thread = None
+            state.ob_client_started = False
+        if state.ob_client_generation == generation:
+            state._ob_ws = None
+            state.set_ob_connected(False)
 
 
-async def _ob_client_main():
-    """WebSocket 客户端主协程：连接 AstrBot，发送事件，接收 API 响应。"""
-    while state.running:
+async def _ob_client_main(generation: int):
+    """连接 AstrBot，推送事件并接收 OneBot API 请求。"""
+    while _client_is_active(generation):
+        ws = None
         try:
             log.info(f"[OB11] 正在连接 AstrBot: {config.ASTRBOT_OB_URL}")
             async with websockets.connect(
@@ -51,46 +77,56 @@ async def _ob_client_main():
                     "User-Agent": "OneBot/11",
                 }
             ) as ws:
+                if not _client_is_active(generation):
+                    break
+
                 state._ob_ws = ws
                 state.set_ob_connected(True)
-                log.info(f"[OB11] ✅ 已连接到 AstrBot")
+                log.info("[OB11] ✅ 已连接到 AstrBot")
 
-                # 心跳保活：每 15 秒发 ping
                 async def _keepalive():
-                    while True:
+                    while _client_is_active(generation):
                         await asyncio.sleep(15)
                         try:
                             await ws.ping()
                         except Exception:
                             break
+
                 ka_task = asyncio.create_task(_keepalive())
                 try:
-                    # 持续接收 API 请求（异步处理，不阻塞）
+                    # 顺序处理 API 请求：先立即回响应，再按 FIFO 入发送队列。
                     async for raw in ws:
+                        if not _client_is_active(generation):
+                            break
                         try:
                             data = json.loads(raw)
-                            # _handle_ob_api 只负责立即回响应并按接收顺序入队，
-                            # 不等待 UIA 真正发送，因此这里可以顺序 await，保证 FIFO。
                             await _handle_ob_api(data)
                         except json.JSONDecodeError:
-                            log.warning(f"[OB11] 收到无效 JSON")
+                            log.warning("[OB11] 收到无效 JSON")
                         except Exception as e:
                             log.error(f"[OB11] 处理 API 异常: {e}")
                 finally:
                     ka_task.cancel()
+                    try:
+                        await ka_task
+                    except asyncio.CancelledError:
+                        pass
 
         except websockets.exceptions.ConnectionClosed:
-            log.warning(f"[OB11] 连接断开，5 秒后重连")
+            if _client_is_active(generation):
+                log.warning("[OB11] 连接断开，5 秒后重连")
         except (ConnectionRefusedError, OSError) as e:
-            log.warning(f"[OB11] 无法连接 AstrBot ({e})，5 秒后重试")
+            if _client_is_active(generation):
+                log.warning(f"[OB11] 无法连接 AstrBot ({e})，5 秒后重试")
         except Exception as e:
-            log.error(f"[OB11] 连接异常: {e}")
+            if _client_is_active(generation):
+                log.error(f"[OB11] 连接异常: {e}")
+        finally:
+            if ws is not None and state._ob_ws is ws:
+                state._ob_ws = None
+                state.set_ob_connected(False)
 
-        state._ob_ws = None
-        state.set_ob_connected(False)
-        if not state.running:
+        if not _client_is_active(generation):
             break
-        await asyncio.sleep(5)
-
-    state._ob_ws = None
-    state.set_ob_connected(False)
+        if not await _retry_delay(generation):
+            break

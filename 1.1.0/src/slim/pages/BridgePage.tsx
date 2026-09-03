@@ -20,7 +20,6 @@ interface BridgeConfig {
   buffer_seconds: number
   group_reply_mode: string
   active_reply_enabled: boolean
-  active_reply_method: string
   active_reply_probability: number
   active_reply_whitelist: string[]
   astrbot_attachments: string
@@ -47,9 +46,10 @@ export default function BridgePage() {
     window.electronAPI.bridge.getLogs().then((l: string[]) => setLogs(l)).catch(() => {})
     window.electronAPI.bridge.getConfig().then((r: any) => {
       if (r?.success && r.config) {
+        const { active_reply_method: _legacyMethod, ...savedConfig } = r.config
         setConfig({
           ...DEFAULT_CONFIG,
-          ...r.config,
+          ...savedConfig,
           active_reply_whitelist: Array.isArray(r.config.active_reply_whitelist)
             ? r.config.active_reply_whitelist
             : []
@@ -139,8 +139,9 @@ export default function BridgePage() {
 
   const handleSaveConfig = async () => {
     setSaving(true)
+    const { active_reply_method: _legacyMethod, ...configWithoutLegacyMethod } = config as BridgeConfig & { active_reply_method?: string }
     const merged = {
-      ...config,
+      ...configWithoutLegacyMethod,
       bot_nicknames: nicknamesInput.split('\n').map(s => s.trim()).filter(Boolean)
     }
     try {
@@ -275,17 +276,6 @@ export default function BridgePage() {
                 <span className="slim-toggle__track" />
               </label>
               <span style={{ fontSize: 12, color: '#555' }}>按概率将普通消息推送给 AstrBot</span>
-            </div>
-            <div className="slim-field">
-              <label>主动回复方法</label>
-              <select
-                value={config.active_reply_method}
-                onChange={e => setConfig(p => ({ ...p, active_reply_method: e.target.value }))}
-                style={{ flex: 1, height: 34, background: '#f8f8f8', border: '1px solid #e6e8f0', borderRadius: 10, color: 'var(--slim-text)', fontSize: 13, padding: '0 10px' }}
-              >
-                <option value="possibility_reply">possibility_reply</option>
-                <option value="poisson_sampling">泊松事件采样（Poisson Sampling）</option>
-              </select>
             </div>
             <div className="slim-field">
               <label>

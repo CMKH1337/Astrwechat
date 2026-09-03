@@ -5,29 +5,32 @@
 </p>
 
 <p align="center">
-  适用于 AstrBot 的本地微信消息连接器
+  给 AstrBot 的本地微信消息连接器
+</p>
+
+<p align="center">
+  <a href="https://github.com/CMKH1337/Astrwechat/releases/latest"><img src="https://img.shields.io/github/v/release/CMKH1337/Astrwechat?label=Release" alt="Release"></a>
+  <a href="https://github.com/CMKH1337/Astrwechat/releases"><img src="https://img.shields.io/github/downloads/CMKH1337/Astrwechat/total?label=Downloads" alt="Downloads"></a>
+  <img src="https://img.shields.io/badge/Windows-10%2B-0078D6?logo=windows" alt="Windows 10+">
+  <img src="https://img.shields.io/badge/OneBot-v11-7C3AED" alt="OneBot v11">
 </p>
 
 AstrWeChat 用于读取本机微信数据、提供本地 HTTP API 和新消息推送，并通过 OneBot v11 Bridge 将微信消息接入 AstrBot。AstrBot 生成回复后，Bridge 可以借助 Windows UI Automation 将消息发送回微信。
 
 所有微信数据均在本机处理。请妥善保管数据库密钥、Access Token 和 Bridge 配置，不要将包含个人配置的文件公开上传。
 
-## 特别鸣谢
-
-感谢以下仓库提供的技术支持：
-
-- [hicccc77/WeFlow](https://github.com/hicccc77/WeFlow)：微信本地数据读取、WCDB 及相关桌面能力。
-- [alingalingling/Akasha-WeChat](https://github.com/alingalingling/Akasha-WeChat)：微信机器人接入、OneBot v11、反向 WebSocket 和消息发送相关思路与实现。
-
-感谢以上项目作者及所有相关开源组件的贡献者。
-
+> [!IMPORTANT]
+> AstrWeChat 不是微信官方产品，也不是 AstrBot 官方组件。一切请在保证数据安全的情况下运行。
 
 ## 版本
 
 | 版本 | 文件 | 使用方式 |
 | --- | --- | --- |
-| Windows 安装版 | `AstrWeChat-1.1.0--windows-amd64-Setup.exe` | 运行安装程序，根据提示完成安装 |
-| Windows 免安装版 | `AstrWeChat-1.1.0-Portable.zip` | 解压到独立目录，运行 `WeFlow.exe` |
+| Windows 安装版 | `AstrWeChat-1.0.0--windows-amd64-Setup.exe` | 运行安装程序，根据提示完成安装 |
+| Windows 免安装版 | `AstrWeChat-1.0.0-Portable.zip` | 解压到独立目录，运行 `WeFlow.exe` |
+
+> [!NOTE]
+> 免安装版中的主程序文件名为 `WeFlow.exe`。这是 WCDB 原生组件的兼容要求，不代表软件品牌发生变化；程序界面和产品名称仍为 AstrWeChat。
 
 ## 主要功能
 
@@ -316,3 +319,24 @@ WeFlow.exe
 - `bridge/config.json` 是本地运行配置，不应提交到公共仓库。
 - 默认服务只监听 `127.0.0.1`。如需监听局域网地址，请设置强 Access Token 并自行配置防火墙。
 - 一键重置会停止相关服务并清除本地配置，请在操作前确认不再需要这些信息。
+
+## 致谢
+
+感谢以下仓库提供的技术支持：
+
+- [hicccc77/WeFlow](https://github.com/hicccc77/WeFlow)：微信本地数据读取、WCDB 及相关桌面能力。
+- [alingalingling/Akasha-WeChat](https://github.com/alingalingling/Akasha-WeChat)：微信机器人接入、OneBot v11、反向 WebSocket 和消息发送相关思路与实现。
+
+感谢以上项目作者及所有相关开源组件的贡献者。
+
+## AstrWeChat UI 风格资产
+
+如果你想让 AI 把其他项目改成当前 AstrWeChat Slim 的 UI，可以直接使用：
+
+- `docs/ASTRWECHAT_UI_STYLE_PROMPT.md`：完整中文提示词，适合直接贴给 AI。
+- `docs/astrwechat-ui-kit.css`：与品牌无关的可移植 CSS 组件基础。
+- `docs/astrwechat-ui-tokens.json`：适合交给代码生成工具或转换成 Tailwind/Theme tokens。
+
+这些资产提炼自 `1.1.0/src/slim/` 的当前实现，保留布局、颜色、间距、圆角、阴影、交互和响应式规则，但不复制 AstrWeChat 的业务逻辑与品牌文案。
+
+

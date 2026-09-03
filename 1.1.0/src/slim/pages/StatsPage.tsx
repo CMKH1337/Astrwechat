@@ -33,12 +33,28 @@ interface StatsCacheEntry {
   snapshot: StatsSnapshot
 }
 
+interface StatsProgress {
+  key: string
+  percent: number
+  phase: string
+  detail: string
+  sessionCount?: number
+}
+
 const PERIOD_OPTIONS = [7, 30] as const
 type Period = typeof PERIOD_OPTIONS[number]
 
 const STATS_CACHE_STORAGE_PREFIX = 'astrwechat:stats-cache:v1:'
 let memoryStatsCache: StatsCacheEntry | null = null
-let statsLoadInFlight: { key: string; promise: Promise<StatsSnapshot> } | null = null
+let statsLoadInFlight: { key: string; promise: Promise<StatsSnapshot>; startedAt: number } | null = null
+let statsProgressSnapshot: StatsProgress | null = null
+let statsProgressStartedAt: number | null = null
+const statsProgressListeners = new Set<(progress: StatsProgress, startedAt: number | null) => void>()
+
+function publishStatsProgress(progress: StatsProgress): void {
+  statsProgressSnapshot = progress
+  for (const listener of statsProgressListeners) listener(progress, statsProgressStartedAt)
+}
 
 function getStatsCacheKey(dbPath: unknown, wxid: unknown): string {
   return `${String(dbPath || '').trim()}::${String(wxid || '').trim()}`
@@ -73,20 +89,39 @@ function saveStatsCache(key: string, snapshot: StatsSnapshot): void {
   }
 }
 
-async function loadStatsSnapshot(forceRefresh: boolean): Promise<StatsSnapshot> {
+async function loadStatsSnapshot(
+  forceRefresh: boolean,
+  onProgress: (progress: StatsProgress) => void,
+): Promise<StatsSnapshot> {
   const [dbPath, wxid] = await Promise.all([
     window.electronAPI.config.get('dbPath'),
     window.electronAPI.config.get('myWxid'),
   ])
   const cacheKey = getStatsCacheKey(dbPath, wxid)
 
-  if (!forceRefresh) {
-    const cached = getPersistedStatsCache(cacheKey)
-    if (cached) return cached
+  const reportProgress = (percent: number, phase: string, detail: string, sessionCount?: number) => {
+    const progress: StatsProgress = { key: cacheKey, percent, phase, detail, sessionCount }
+    publishStatsProgress(progress)
+    onProgress(progress)
   }
 
-  // 页面切换或重复点击时复用同一个任务，避免同一账号并发扫描多次。
-  if (statsLoadInFlight?.key === cacheKey) return statsLoadInFlight.promise
+  // 页面切换回来时优先加入正在执行的任务，进度和计时都沿用原任务。
+  if (statsLoadInFlight?.key === cacheKey) {
+    if (statsProgressSnapshot?.key === cacheKey) onProgress(statsProgressSnapshot)
+    return statsLoadInFlight.promise
+  }
+
+  if (!forceRefresh) {
+    const cached = getPersistedStatsCache(cacheKey)
+    if (cached) {
+      statsProgressStartedAt = null
+      reportProgress(100, '读取缓存完成', '使用上次统计结果，无需重新扫描数据库')
+      return cached
+    }
+  }
+
+  statsProgressStartedAt = Date.now()
+  reportProgress(5, '准备统计', '正在读取微信会话列表')
 
   const promise = (async () => {
     const sessionsResult = await window.electronAPI.chat.getSessions()
@@ -96,6 +131,7 @@ async function loadStatsSnapshot(forceRefresh: boolean): Promise<StatsSnapshot> 
 
     const sessions = sessionsResult.sessions as SessionLike[]
     const sessionIds = sessions.map(session => session.username).filter(Boolean)
+    reportProgress(20, '读取会话完成', `已发现 ${sessionIds.length} 个会话`, sessionIds.length)
     const countsResult = await window.electronAPI.chat.getSessionMessageCounts(sessionIds, {
       // 普通进入优先使用后端已有缓存；手动刷新才强制重新扫描。
       preferHintCache: !forceRefresh,
@@ -103,8 +139,10 @@ async function loadStatsSnapshot(forceRefresh: boolean): Promise<StatsSnapshot> 
     })
     const counts = countsResult.counts || {}
     const groupsOnly = sessions.filter(session => session.username.endsWith('@chatroom'))
+    reportProgress(58, '统计消息总数完成', `已处理 ${Object.keys(counts).length}/${sessionIds.length} 个会话`, sessionIds.length)
 
     const mergedDates: Record<string, number> = {}
+    reportProgress(65, '统计消息趋势', '正在按日期汇总消息数量', sessionIds.length)
     const datesResult = await window.electronAPI.chat.getMessageDateCountsBatch(sessionIds)
     Object.values(datesResult.data || {}).forEach(sessionDates => {
       Object.entries(sessionDates).forEach(([date, count]) => {
@@ -112,6 +150,7 @@ async function loadStatsSnapshot(forceRefresh: boolean): Promise<StatsSnapshot> 
       })
     })
 
+    reportProgress(90, '整理统计结果', '正在生成群聊排名和趋势图表', sessionIds.length)
     const snapshot: StatsSnapshot = {
       totalMessages: Object.values(counts).reduce((sum, count) => sum + (Number(count) || 0), 0),
       groupCount: groupsOnly.length,
@@ -126,10 +165,11 @@ async function loadStatsSnapshot(forceRefresh: boolean): Promise<StatsSnapshot> 
       updatedAt: Date.now(),
     }
     saveStatsCache(cacheKey, snapshot)
+    reportProgress(100, '统计完成', `已完成 ${sessionIds.length} 个会话的统计`, sessionIds.length)
     return snapshot
   })()
 
-  statsLoadInFlight = { key: cacheKey, promise }
+  statsLoadInFlight = { key: cacheKey, promise, startedAt: statsProgressStartedAt || Date.now() }
   try {
     return await promise
   } finally {
@@ -147,6 +187,14 @@ export default function StatsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [progress, setProgress] = useState<StatsProgress>({
+    key: '',
+    percent: 0,
+    phase: '准备统计',
+    detail: '正在准备读取本地数据库',
+  })
+  const [progressElapsedMs, setProgressElapsedMs] = useState(0)
+  const [progressStartedAt, setProgressStartedAt] = useState<number | null>(statsProgressStartedAt)
 
   useEffect(() => {
     let active = true
@@ -178,7 +226,7 @@ export default function StatsPage() {
     setLoading(true)
     setError('')
     try {
-      const snapshot = await loadStatsSnapshot(forceRefresh)
+      const snapshot = await loadStatsSnapshot(forceRefresh, setProgress)
       applySnapshot(snapshot)
     } catch (reason) {
       setError(String(reason).replace(/^Error:\s*/, ''))
@@ -190,6 +238,26 @@ export default function StatsPage() {
       setLoading(false)
     }
   }, [applySnapshot])
+
+  useEffect(() => {
+    const listener = (nextProgress: StatsProgress, startedAt: number | null) => {
+      setProgress(nextProgress)
+      setProgressStartedAt(startedAt)
+      setProgressElapsedMs(startedAt ? Date.now() - startedAt : 0)
+    }
+    statsProgressListeners.add(listener)
+    if (statsProgressSnapshot) listener(statsProgressSnapshot, statsProgressStartedAt)
+    return () => { statsProgressListeners.delete(listener) }
+  }, [])
+
+  useEffect(() => {
+    if (!loading || !progressStartedAt) return
+    setProgressElapsedMs(Date.now() - progressStartedAt)
+    const timer = window.setInterval(() => {
+      setProgressElapsedMs(Date.now() - progressStartedAt)
+    }, 250)
+    return () => window.clearInterval(timer)
+  }, [loading, progressStartedAt])
 
   useEffect(() => {
     void loadStats(false)
@@ -275,6 +343,23 @@ export default function StatsPage() {
       </div>
 
       {error && <div className="stats-error">{error}</div>}
+
+      {loading && (
+        <section className="slim-card stats-progress-card" aria-live="polite">
+          <div className="stats-progress-card__header">
+            <div>
+              <div className="slim-card__title">统计进度</div>
+              <p>{progress.phase} · 已用时 {formatElapsed(progressElapsedMs)}</p>
+            </div>
+            <strong>{Math.round(progress.percent)}%</strong>
+          </div>
+          <div className="stats-progress-track"><span style={{ width: `${Math.max(3, progress.percent)}%` }} /></div>
+          <div className="stats-progress-card__detail">
+            <span>{progress.detail}</span>
+            {progress.sessionCount ? <em>{progress.sessionCount} 个会话</em> : null}
+          </div>
+        </section>
+      )}
 
       <div className="stats-overview-grid">
         <StatCard label="正常运行时间" value={formatRuntime(runtimeSeconds)} detail={`启动于：${formatStartTime(startedAt)}`} />
@@ -370,6 +455,13 @@ function formatRuntime(seconds: number) {
   const minutes = String(Math.floor((total % 3600) / 60)).padStart(2, '0')
   const secs = String(total % 60).padStart(2, '0')
   return `${hours}:${minutes}:${secs}`
+}
+
+function formatElapsed(milliseconds: number) {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000))
+  const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0')
+  const seconds = String(totalSeconds % 60).padStart(2, '0')
+  return `${minutes}:${seconds}`
 }
 
 function formatStartTime(date: Date) {

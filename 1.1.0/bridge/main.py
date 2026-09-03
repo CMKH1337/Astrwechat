@@ -23,6 +23,7 @@ import config as cfg
 from senders import create_sender
 from ob_client import _run_ob_client
 from bridge_core import WeFlowBridge
+from instance_lock import acquire_instance_lock, release_instance_lock
 
 # Electron 通过管道读取 stdout；Windows 默认 GBK 会使中文和 emoji 写出失败。
 if hasattr(sys.stdout, "reconfigure"):
@@ -80,14 +81,45 @@ def _start_bridge():
         if state.running:
             emit_log("Bridge 已在运行中", "warn")
             return
+
+        # A fast stop/start used to let the previous OB11 thread observe
+        # running=True again and reconnect beside the new thread. aiocqhttp then
+        # lost the API route for this self_id and raised ApiNotAvailable.
+        previous_bridge = state.bridge_thread
+        if previous_bridge and previous_bridge.is_alive():
+            previous_bridge.join(timeout=3)
+            if previous_bridge.is_alive():
+                emit_log("上一条消息监听仍在退出，请稍后重试", "error")
+                return
+
+        previous_client = state.ob_client_thread
+        if previous_client and previous_client.is_alive():
+            previous_client.join(timeout=3)
+            if previous_client.is_alive():
+                emit_log("上一条 AstrBot 连接仍在退出，请稍后重试", "error")
+                return
+
+        lock_identity = f"{cfg.ASTRBOT_OB_URL}|{state._self_id_int}"
+        if not acquire_instance_lock(lock_identity):
+            emit_log("另一个 AstrWeChat Bridge 正在使用同一 AstrBot 身份", "error")
+            return
+
         state.running = True
+        state.ob_client_generation += 1
+        generation = state.ob_client_generation
+
     state.paused.clear()
     state.sender_instance = create_sender()
 
-    if not state.ob_client_started:
-        t = threading.Thread(target=_run_ob_client, daemon=True, name="ob11-client")
-        t.start()
-        state.ob_client_started = True
+    t = threading.Thread(
+        target=_run_ob_client,
+        args=(generation,),
+        daemon=True,
+        name=f"ob11-client-{generation}",
+    )
+    state.ob_client_thread = t
+    state.ob_client_started = True
+    t.start()
 
     state.bridge_thread = threading.Thread(target=_bridge_loop, daemon=True, name="bridge")
     state.bridge_thread.start()
@@ -97,6 +129,9 @@ def _start_bridge():
 def _stop_bridge():
     with state.run_lock:
         state.running = False
+        # Invalidate the running client before closing its socket. Even if a
+        # restart happens quickly, the old thread can no longer reconnect.
+        state.ob_client_generation += 1
 
     with state.bridge_lock:
         if state.bridge_instance and state.bridge_instance._sse_session:
@@ -105,15 +140,46 @@ def _stop_bridge():
             except Exception:
                 pass
 
-    _ws = state._ob_ws
-    _loop = state._ob_ws_loop
-    if _ws and _loop and _loop.is_running():
+    ws = state._ob_ws
+    loop = state._ob_ws_loop
+    if ws and loop and loop.is_running():
         import asyncio
-        asyncio.run_coroutine_threadsafe(_ws.close(), _loop)
+        try:
+            close_future = asyncio.run_coroutine_threadsafe(ws.close(), loop)
+            close_future.result(timeout=2)
+        except Exception as e:
+            emit_log(f"关闭 AstrBot 连接时出现异常: {e}", "warn")
+
+    client_thread = state.ob_client_thread
+    if (
+        client_thread
+        and client_thread is not threading.current_thread()
+        and client_thread.is_alive()
+    ):
+        client_thread.join(timeout=3)
+
+    if not client_thread or not client_thread.is_alive():
+        state.ob_client_thread = None
+        state.ob_client_started = False
+    else:
+        # Keep the flag truthful so _start_bridge refuses to create a duplicate.
+        state.ob_client_started = True
+        emit_log("AstrBot 连接线程仍在退出中", "warn")
+
+    bridge_thread = state.bridge_thread
+    if (
+        bridge_thread
+        and bridge_thread is not threading.current_thread()
+        and bridge_thread.is_alive()
+    ):
+        bridge_thread.join(timeout=3)
+    if not bridge_thread or not bridge_thread.is_alive():
+        state.bridge_thread = None
+    else:
+        emit_log("消息监听线程仍在退出中", "warn")
 
     state.set_ob_connected(False)
-    state.ob_client_started = False
-    state._ob_ws_loop = None
+    release_instance_lock()
     emit_status()
 
 
@@ -170,6 +236,8 @@ def _bridge_loop():
             time.sleep(1)
 
     emit_status()
+    if state.bridge_thread is threading.current_thread():
+        state.bridge_thread = None
 
 
 # ============ 配置热更新 ============
@@ -189,7 +257,6 @@ def _apply_config(new_cfg: dict):
     cfg.GROUP_REPLY_MODE = new_cfg.get("group_reply_mode", cfg.GROUP_REPLY_MODE)
     state.group_reply_mode = cfg.GROUP_REPLY_MODE
     cfg.ACTIVE_REPLY_ENABLED = bool(new_cfg.get("active_reply_enabled", cfg.ACTIVE_REPLY_ENABLED))
-    cfg.ACTIVE_REPLY_METHOD = str(new_cfg.get("active_reply_method", cfg.ACTIVE_REPLY_METHOD) or cfg.ACTIVE_REPLY_METHOD)
     try:
         cfg.ACTIVE_REPLY_PROBABILITY = min(1.0, max(0.0, float(new_cfg.get("active_reply_probability", cfg.ACTIVE_REPLY_PROBABILITY))))
     except (TypeError, ValueError):

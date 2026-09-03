@@ -91,6 +91,8 @@ bridge_lock = threading.Lock()
 sender_instance = None
 _ob_id_to_contact: dict[int, str] = {}  # OneBot user_id/group_id → 微信联系名
 ob_client_started = False
+ob_client_thread = None
+ob_client_generation = 0
 
 # 群聊回复模式（运行时可变，启动时从 config 初始化）
 group_reply_mode = "mention"

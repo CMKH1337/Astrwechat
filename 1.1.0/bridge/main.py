@@ -23,7 +23,65 @@ import config as cfg
 from senders import create_sender
 from ob_client import _run_ob_client
 from bridge_core import WeFlowBridge
-from instance_lock import acquire_instance_lock, release_instance_lock
+
+# Keep the OneBot identity lock in the entrypoint itself. The Bridge is shipped
+# as a collection of standalone Python files, so startup must not depend on an
+# optional sibling module being copied by an older installer.
+_lock_file = None
+
+
+def acquire_instance_lock(identity: str) -> bool:
+    """Return False when another Bridge owns the same OneBot identity."""
+    global _lock_file
+    if _lock_file is not None:
+        return True
+
+    import hashlib
+    import tempfile
+    digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:20]
+    path = os.path.join(tempfile.gettempdir(), f"astrwechat-ob11-{digest}.lock")
+    handle = open(path, "a+b")
+    try:
+        handle.seek(0, os.SEEK_END)
+        if handle.tell() == 0:
+            handle.write(b"\0")
+            handle.flush()
+        handle.seek(0)
+
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (OSError, IOError):
+        handle.close()
+        return False
+
+    _lock_file = handle
+    return True
+
+
+def release_instance_lock() -> None:
+    """Release the process lock; safe to call more than once."""
+    global _lock_file
+    handle = _lock_file
+    _lock_file = None
+    if handle is None:
+        return
+
+    try:
+        handle.seek(0)
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    except (OSError, IOError):
+        pass
+    finally:
+        handle.close()
 
 # Electron 通过管道读取 stdout；Windows 默认 GBK 会使中文和 emoji 写出失败。
 if hasattr(sys.stdout, "reconfigure"):

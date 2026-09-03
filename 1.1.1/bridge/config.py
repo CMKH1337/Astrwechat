@@ -41,6 +41,7 @@ ACTIVE_REPLY_WHITELIST = [
 
 # AstrBot OneBot 连接配置（bridge 作为 WebSocket 客户端连 AstrBot 的 aiocqhttp 服务端）
 ASTRBOT_OB_URL = config.get("astrbot_ob_url", "ws://127.0.0.1:19777")
+ASTRBOT_OB_TOKEN = str(config.get("astrbot_ob_token", "") or "").strip()
 
 # ============ 日志 ============
 

@@ -22,6 +22,7 @@ export default function ConnectPage({ connected, onConnected }: Props) {
   const [keyProgress, setKeyProgress] = useState('')
   const [imageKeyFetching, setImageKeyFetching] = useState(false)
   const [imageKeyProgress, setImageKeyProgress] = useState('')
+  const [restartingConnection, setRestartingConnection] = useState(false)
   const connectingRef = useRef(false)
   const wxidScanRequestRef = useRef(0)
   const wxidPickerRef = useRef<HTMLDivElement>(null)
@@ -160,6 +161,29 @@ export default function ConnectPage({ connected, onConnected }: Props) {
       onConnected(false)
     } finally {
       connectingRef.current = false
+    }
+  }
+
+  const handleRestartConnection = async () => {
+    if (connectingRef.current || restartingConnection) return
+    if (!dbPath.trim() || !decryptKey.trim() || !wxid.trim()) {
+      setStatus('err')
+      setStatusMsg('请填写完整的路径、密钥和微信 ID')
+      return
+    }
+
+    setRestartingConnection(true)
+    setStatus('testing')
+    setStatusMsg('正在重启微信连接...')
+    try {
+      await window.electronAPI.config.set('dbPath', dbPath.trim())
+      await window.electronAPI.config.set('decryptKey', decryptKey.trim())
+      await window.electronAPI.config.set('myWxid', wxid.trim())
+      await window.electronAPI.app.restart()
+    } catch (error) {
+      setRestartingConnection(false)
+      setStatus('err')
+      setStatusMsg('重启微信连接失败：' + String(error))
     }
   }
 
@@ -423,9 +447,16 @@ export default function ConnectPage({ connected, onConnected }: Props) {
           <button
             className="slim-btn slim-btn--primary"
             onClick={() => tryConnect(dbPath, decryptKey, wxid)}
-            disabled={status === 'testing'}
+            disabled={status === 'testing' || restartingConnection}
           >
             连接数据库
+          </button>
+          <button
+            className="slim-btn slim-btn--secondary"
+            onClick={handleRestartConnection}
+            disabled={restartingConnection || status === 'testing'}
+          >
+            {restartingConnection ? '重启中...' : '重启微信连接'}
           </button>
 
           {(status !== 'idle' || statusMsg) && (

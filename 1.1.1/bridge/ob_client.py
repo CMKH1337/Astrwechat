@@ -69,13 +69,17 @@ async def _ob_client_main(generation: int):
         ws = None
         try:
             log.info(f"[OB11] 正在连接 AstrBot: {config.ASTRBOT_OB_URL}")
+            headers = {
+                "X-Self-ID": str(state._self_id_int),
+                "X-Client-Role": "Universal",
+                "User-Agent": "OneBot/11",
+            }
+            if config.ASTRBOT_OB_TOKEN:
+                headers["Authorization"] = f"Bearer {config.ASTRBOT_OB_TOKEN}"
+
             async with websockets.connect(
                 config.ASTRBOT_OB_URL,
-                additional_headers={
-                    "X-Self-ID": str(state._self_id_int),
-                    "X-Client-Role": "Universal",
-                    "User-Agent": "OneBot/11",
-                }
+                additional_headers=headers,
             ) as ws:
                 if not _client_is_active(generation):
                     break

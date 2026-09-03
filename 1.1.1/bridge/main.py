@@ -325,6 +325,7 @@ def _apply_config(new_cfg: dict):
         if str(item).strip()
     ]
     cfg.ASTRBOT_OB_URL = new_cfg.get("astrbot_ob_url", cfg.ASTRBOT_OB_URL)
+    cfg.ASTRBOT_OB_TOKEN = str(new_cfg.get("astrbot_ob_token", cfg.ASTRBOT_OB_TOKEN) or "").strip()
     emit_log("配置已更新")
 
 

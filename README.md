@@ -177,6 +177,7 @@ Bridge 负责将 AstrWeChat 的消息转成 OneBot v11 事件，并通过反向 
 | AstrWeChat 地址 | `http://127.0.0.1:5031` | 本地 HTTP API 地址 |
 | Access Token | 空 | 应与 API 服务页面设置一致 |
 | AstrBot WS | `ws://127.0.0.1:11229/ws` | AstrBot OneBot v11 反向 WebSocket 地址 |
+| 反向 WebSocket Token | 空 | AstrBot 启用反向 WebSocket 鉴权时填写，留空则不启用 Token 验证 |
 | Bot 微信 ID | 空 | 机器人使用的微信账号 ID |
 | 机器人昵称 | 空 | 群聊中用于识别机器人的昵称，每行一个 |
 | 群聊模式 | `mention` | 默认仅响应提及机器人的消息 |

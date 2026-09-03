@@ -1912,6 +1912,14 @@ function registerIpcHandlers() {
     return appVersion
   })
 
+  ipcMain.handle('app:restart', async () => {
+    setTimeout(() => {
+      app.relaunch()
+      void shutdownAppServices().finally(() => app.exit(0))
+    }, 100)
+    return { success: true }
+  })
+
   ipcMain.handle('app:getRuntimeSeconds', async () => {
     return Math.max(0, Math.floor(process.uptime()))
   })

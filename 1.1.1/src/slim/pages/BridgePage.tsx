@@ -15,6 +15,7 @@ interface BridgeConfig {
   weflow_base_url: string
   access_token: string
   astrbot_ob_url: string
+  astrbot_ob_token: string
   bot_nicknames: string[]
   bot_wxid: string
   buffer_seconds: number
@@ -239,6 +240,19 @@ export default function BridgePage() {
             <div className="slim-field">
               <label>AstrBot WS</label>
               <input type="text" value={config.astrbot_ob_url} onChange={e => setConfig(p => ({ ...p, astrbot_ob_url: e.target.value }))} placeholder="ws://127.0.0.1:11229/ws" />
+            </div>
+            <div className="slim-field">
+              <label>
+                反向 WebSocket Token
+                <span style={{ display: 'block', fontSize: 11, color: '#555', marginTop: 3 }}>AstrBot 启用鉴权时填写</span>
+              </label>
+              <input
+                type="text"
+                value={config.astrbot_ob_token}
+                onChange={e => setConfig(p => ({ ...p, astrbot_ob_token: e.target.value }))}
+                placeholder="未设置则不启用 Token 验证"
+                autoComplete="off"
+              />
             </div>
           </div>
 

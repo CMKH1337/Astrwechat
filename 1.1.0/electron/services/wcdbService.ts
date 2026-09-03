@@ -25,6 +25,7 @@ export class WcdbService {
   private logEnabled = false
   private monitorListener: ((type: string, json: string) => void) | null = null
   private lifecycleChain: Promise<void> = Promise.resolve()
+  private activeConnection: { accountDir: string; hexKey: string } | null = null
 
   constructor() {}
 
@@ -45,9 +46,10 @@ export class WcdbService {
     }
 
     try {
-      this.worker = new Worker(finalPath)
+      const worker = new Worker(finalPath)
+      this.worker = worker
 
-      this.worker.on('message', (msg: any) => {
+      worker.on('message', (msg: any) => {
         const { id, result, error, type, payload } = msg
 
         if (type === 'monitor') {
@@ -65,27 +67,23 @@ export class WcdbService {
         }
       })
 
-      this.worker.on('error', (err) => {
-        // Worker 发生错误，需要 reject 所有 pending promises
+      worker.on('error', (err) => {
+        // An obsolete worker must not affect a replacement worker.
+        if (this.worker !== worker) return
         console.error('WCDB Worker 错误:', err)
-        const errorMsg = err instanceof Error ? err.message : String(err)
-        for (const [id, p] of this.pending) {
-          p.reject(new Error(`Worker 错误: ${errorMsg}`))
-        }
-        this.pending.clear()
+        this.rejectPending(new Error(`Worker 错误: ${err instanceof Error ? err.message : String(err)}`))
       })
 
-      this.worker.on('exit', (code) => {
-        // Worker 退出，需要 reject 所有 pending promises
+      worker.on('exit', (code) => {
+        // An obsolete worker must not clear the replacement worker reference.
+        if (this.worker !== worker) return
         if (code !== 0) {
           console.error('WCDB Worker 异常退出，退出码:', code)
           const errorMsg = `Worker 异常退出 (退出码: ${code})。可能是数据服务加载失败，请检查是否安装了 Visual C++ Redistributable。`
-          for (const [id, p] of this.pending) {
-            p.reject(new Error(errorMsg))
-          }
-          this.pending.clear()
+          this.rejectPending(new Error(errorMsg))
         }
         this.worker = null
+        this.activeConnection = null
       })
 
       // 如果已有路径配置，重新发送给新的 worker
@@ -114,6 +112,38 @@ export class WcdbService {
       this.pending.set(id, { resolve, reject })
       this.worker!.postMessage({ id, type, payload })
     })
+  }
+
+  private rejectPending(error: Error): void {
+    for (const [, pending] of this.pending) {
+      pending.reject(error)
+    }
+    this.pending.clear()
+  }
+
+  /**
+   * Recreate the worker before switching accounts. The native WCDB runtime
+   * can return -1006 when wcdb_shutdown and wcdb_init are called again in
+   * the same process.
+   */
+  private async restartWorkerForDatabaseSwitch(): Promise<void> {
+    const previousWorker = this.worker
+    this.worker = null
+    this.activeConnection = null
+    this.rejectPending(new Error('数据库连接已切换，旧请求已取消'))
+
+    if (previousWorker) {
+      try {
+        await previousWorker.terminate()
+      } catch {
+        // The worker may already have exited.
+      }
+    }
+
+    this.initWorker()
+    if (!this.worker) {
+      throw new Error('WCDB Worker 不可用')
+    }
   }
 
   /**
@@ -175,7 +205,22 @@ export class WcdbService {
    * @param hexKey 解密密钥
    */
   async open(accountDir: string, hexKey: string): Promise<boolean> {
-    return this.runLifecycleExclusive(() => this.callWorker<boolean>('open', { accountDir, hexKey }))
+    return this.runLifecycleExclusive(async () => {
+      const connectionChanged = this.activeConnection !== null &&
+        (this.activeConnection.accountDir !== accountDir || this.activeConnection.hexKey !== hexKey)
+
+      if (connectionChanged) {
+        await this.restartWorkerForDatabaseSwitch()
+      }
+
+      const opened = await this.callWorker<boolean>('open', { accountDir, hexKey })
+      if (opened) {
+        this.activeConnection = { accountDir, hexKey }
+      } else if (connectionChanged) {
+        this.activeConnection = null
+      }
+      return opened
+    })
   }
 
   async getLastInitError(): Promise<string | null> {
@@ -186,7 +231,13 @@ export class WcdbService {
    * 关闭数据库连接
    */
   async close(): Promise<void> {
-    return this.runLifecycleExclusive(() => this.callWorker('close'))
+    return this.runLifecycleExclusive(async () => {
+      try {
+        await this.callWorker('close')
+      } finally {
+        this.activeConnection = null
+      }
+    })
   }
 
   /**
@@ -194,9 +245,12 @@ export class WcdbService {
    */
   async shutdown(): Promise<void> {
     try { await this.close() } catch {}
-    if (this.worker) {
-      try { await this.worker.terminate() } catch {}
-      this.worker = null
+    const worker = this.worker
+    this.worker = null
+    this.activeConnection = null
+    this.rejectPending(new Error('WCDB Worker 已关闭'))
+    if (worker) {
+      try { await worker.terminate() } catch {}
     }
   }
 

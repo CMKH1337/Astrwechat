@@ -1,7 +1,7 @@
 # AstrWeChat
 
 <p align="center">
-  <img src="1.1.0/icon.png" alt="AstrWeChat" width="128" height="128">
+  <img src="1.1.1/icon.png" alt="AstrWeChat" width="128" height="128">
 </p>
 
 <p align="center">
@@ -26,8 +26,8 @@ AstrWeChat 用于读取本机微信数据、提供本地 HTTP API 和新消息�
 
 | 版本 | 文件 | 使用方式 |
 | --- | --- | --- |
-| Windows 安装版 | `AstrWeChat-1.0.0--windows-amd64-Setup.exe` | 运行安装程序，根据提示完成安装 |
-| Windows 免安装版 | `AstrWeChat-1.0.0-Portable.zip` | 解压到独立目录，运行 `WeFlow.exe` |
+| Windows 安装版 | `AstrWeChat-1.1.1-Setup.exe` | 运行安装程序，根据提示完成安装 |
+| Windows 免安装版 | Release 页面中的 Portable 包 | 解压到独立目录，运行 `WeFlow.exe` |
 
 > [!NOTE]
 > 免安装版中的主程序文件名为 `WeFlow.exe`。这是 WCDB 原生组件的兼容要求，不代表软件品牌发生变化；程序界面和产品名称仍为 AstrWeChat。
@@ -338,6 +338,4 @@ WeFlow.exe
 - `docs/astrwechat-ui-kit.css`：与品牌无关的可移植 CSS 组件基础。
 - `docs/astrwechat-ui-tokens.json`：适合交给代码生成工具或转换成 Tailwind/Theme tokens。
 
-这些资产提炼自 `1.1.0/src/slim/` 的当前实现，保留布局、颜色、间距、圆角、阴影、交互和响应式规则，但不复制 AstrWeChat 的业务逻辑与品牌文案。
-
-
+这些资产提炼自 `1.1.1/src/slim/` 的当前实现，保留布局、颜色、间距、圆角、阴影、交互和响应式规则，但不复制 AstrWeChat 的业务逻辑与品牌文案。

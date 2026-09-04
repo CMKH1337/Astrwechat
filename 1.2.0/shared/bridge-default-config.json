@@ -1,0 +1,15 @@
+{
+  "weflow_base_url": "http://127.0.0.1:5031",
+  "access_token": "",
+  "astrbot_ob_url": "ws://127.0.0.1:11229/ws",
+  "astrbot_ob_token": "",
+  "bot_nicknames": [],
+  "bot_wxid": "",
+  "buffer_seconds": 0,
+  "group_reply_mode": "mention",
+  "active_reply_enabled": false,
+  "active_reply_probability": 0.1,
+  "group_reply_filter_mode": "blacklist",
+  "group_reply_filter_sessions": [],
+  "astrbot_attachments": ""
+}

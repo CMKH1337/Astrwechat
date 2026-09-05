@@ -552,8 +552,7 @@ export default function BridgePage() {
         )}
       </div>
 
-      {tab === 'overview' && (
-        <div className="bridge-overview-grid">
+      <div className={`bridge-overview-grid ${tab === 'overview' ? '' : 'is-hidden'}`}>
           <section className="slim-card bridge-overview-card">
             <div className="bridge-card-heading">
               <span className="bridge-card-heading__icon"><Activity size={16} /></span>
@@ -621,8 +620,7 @@ export default function BridgePage() {
               </div>
             )}
           </section>
-        </div>
-      )}
+      </div>
 
       {tab === 'logs' && (
         <div className="bridge-log-view">

@@ -5,6 +5,7 @@
   "astrbot_ob_token": "",
   "bot_nicknames": [],
   "bot_wxid": "",
+  "search_by_wxid": false,
   "buffer_seconds": 0,
   "group_reply_mode": "mention",
   "active_reply_enabled": false,

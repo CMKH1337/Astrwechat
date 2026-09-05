@@ -34,6 +34,10 @@ function main() {
   if (!fs.existsSync(sourceDir)) {
     throw new Error(`VC++ runtime source directory is missing: ${sourceDir}`)
   }
+  if (process.platform === 'win32' && !fs.existsSync(targetDir)) {
+    // Electron 43 installs lazily on first require; this also validates the download.
+    require('electron')
+  }
   if (!fs.existsSync(targetDir)) {
     throw new Error(`Electron runtime directory is missing: ${targetDir}`)
   }

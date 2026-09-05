@@ -1,0 +1,169 @@
+.bridge-workflow {
+  display: flex;
+  height: 272px;
+  min-height: 272px;
+  max-height: 272px;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.bridge-workflow .bridge-card-heading {
+  margin-bottom: 8px;
+}
+
+.bridge-workflow__count {
+  display: grid;
+  min-width: 20px;
+  height: 20px;
+  margin-left: auto;
+  padding: 0 6px;
+  place-items: center;
+  color: #666;
+  background: #f0f1f6;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.bridge-workflow__stage {
+  display: flex;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  padding-top: 2px;
+  padding-right: 2px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-color: #d9d9d9 transparent;
+  scrollbar-width: thin;
+}
+
+.bridge-workflow__item {
+  position: relative;
+  display: flex;
+  box-sizing: border-box;
+  min-height: 40px;
+  max-height: 48px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 5px 7px;
+  overflow: hidden;
+  background: #fafafa;
+  border: 1px solid #ececf0;
+  border-radius: 8px;
+  animation: bridge-workflow-log-enter 0.45s cubic-bezier(0.2, 0.75, 0.2, 1) both;
+  transition:
+    max-height 0.32s ease,
+    min-height 0.32s ease,
+    margin-bottom 0.32s ease,
+    padding-top 0.32s ease,
+    padding-bottom 0.32s ease,
+    opacity 0.32s ease,
+    transform 0.32s ease,
+    border-width 0.32s ease;
+}
+
+.bridge-workflow__item.is-leaving {
+  max-height: 0;
+  min-height: 0;
+  margin-bottom: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  opacity: 0;
+  border-width: 0;
+  pointer-events: none;
+  transform: translateY(-10px);
+}
+
+.bridge-workflow__icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  place-items: center;
+  color: #5e6373;
+  background: #f3f3f3;
+  border: 1px solid #e5e7ef;
+  border-radius: 7px;
+}
+
+.bridge-workflow__copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.bridge-workflow__copy strong,
+.bridge-workflow__copy em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bridge-workflow__copy strong {
+  color: #333;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.bridge-workflow__copy em {
+  color: #999;
+  font-size: 10px;
+  font-style: normal;
+  letter-spacing: 0;
+}
+
+.bridge-workflow__lifetime {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--slim-accent), #f3abc7);
+  transform-origin: left;
+  animation: bridge-workflow-lifetime 7s linear both;
+}
+
+.bridge-workflow__empty {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #a1a1a1;
+  font-size: 12px;
+}
+
+@keyframes bridge-workflow-log-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) translateX(10px) scale(0.92);
+  }
+
+  70% {
+    opacity: 1;
+    transform: translateY(0) translateX(0) scale(1.025);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) translateX(0) scale(1);
+  }
+}
+
+@keyframes bridge-workflow-lifetime {
+  from {
+    transform: scaleX(1);
+  }
+
+  to {
+    transform: scaleX(0);
+  }
+}

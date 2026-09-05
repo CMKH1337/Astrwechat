@@ -21,6 +21,7 @@ import {
 import '../AppSlim.scss'
 import './BridgePage.scss'
 import bridgeDefaultConfig from '../../../shared/bridge-default-config.json'
+import BridgeWorkflow from './BridgeWorkflow'
 
 type GroupReplyFilterMode = 'whitelist' | 'blacklist'
 type BridgeTab = 'overview' | 'logs' | 'config'
@@ -42,6 +43,7 @@ interface BridgeConfig {
   astrbot_ob_token: string
   bot_nicknames: string[]
   bot_wxid: string
+  search_by_wxid: boolean
   buffer_seconds: number
   group_reply_mode: string
   active_reply_enabled: boolean
@@ -142,6 +144,7 @@ const normalizeLoadedConfig = (raw: Record<string, unknown>) => {
         ? raw.bot_nicknames.map(item => String(item)).filter(Boolean)
         : [],
       bot_wxid: String(raw.bot_wxid ?? ''),
+      search_by_wxid: raw.search_by_wxid === true,
       buffer_seconds: toNumber(raw.buffer_seconds, DEFAULT_CONFIG.buffer_seconds),
       group_reply_mode: String(raw.group_reply_mode ?? DEFAULT_CONFIG.group_reply_mode),
       active_reply_enabled: raw.active_reply_enabled === true,
@@ -491,7 +494,7 @@ export default function BridgePage() {
     ? '响应所有消息'
     : config.group_reply_mode === 'batch'
       ? '批量合并'
-      : '需要 @'
+      : '响应@'
 
   const filterDescription = config.group_reply_filter_mode === 'whitelist'
     ? '只回复选中的会话'
@@ -585,18 +588,7 @@ export default function BridgePage() {
             </div>
           </section>
 
-          <section className="slim-card bridge-overview-card">
-            <div className="bridge-card-heading">
-              <span className="bridge-card-heading__icon"><Settings2 size={16} /></span>
-              <h3>连接配置</h3>
-            </div>
-            <div className="bridge-summary-list">
-              <div><span>WeFlow 地址</span><strong>{config.weflow_base_url || '未配置'}</strong></div>
-              <div><span>AstrBot WS</span><strong>{config.astrbot_ob_url || '未配置'}</strong></div>
-              <div><span>WeFlow Token</span><strong>{config.access_token ? '已配置' : '未配置'}</strong></div>
-              <div><span>AstrBot Token</span><strong>{config.astrbot_ob_token ? '已配置' : '未配置'}</strong></div>
-            </div>
-          </section>
+          <BridgeWorkflow logs={logs} />
 
           <section className="slim-card bridge-overview-card">
             <div className="bridge-card-heading">
@@ -931,6 +923,17 @@ export default function BridgePage() {
 
           <div className="slim-card">
             <div className="slim-card__title">行为设置</div>
+            <div className="slim-field">
+              <label>以微信ID查找联系人</label>
+              <label className="slim-toggle">
+                <input
+                  type="checkbox"
+                  checked={config.search_by_wxid}
+                  onChange={event => setConfig(prev => ({ ...prev, search_by_wxid: event.target.checked }))}
+                />
+                <span className="slim-toggle__track" />
+              </label>
+            </div>
             <div className="slim-field">
               <label>群聊模式</label>
               <select

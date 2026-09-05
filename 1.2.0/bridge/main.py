@@ -166,6 +166,7 @@ def _start_bridge():
         state.ob_client_generation += 1
         generation = state.ob_client_generation
         state._ob_group_id_to_session_id.clear()
+        state._ob_private_id_to_session_id.clear()
 
     state.paused.clear()
     state.sender_instance = create_sender()
@@ -312,6 +313,7 @@ def _apply_config(new_cfg: dict):
     cfg.ACCESS_TOKEN = new_cfg.get("access_token", cfg.ACCESS_TOKEN)
     cfg.BOT_NICKNAMES = new_cfg.get("bot_nicknames", cfg.BOT_NICKNAMES)
     cfg.BOT_WXID = new_cfg.get("bot_wxid", cfg.BOT_WXID)
+    cfg.SEARCH_BY_WXID = bool(new_cfg.get("search_by_wxid", cfg.SEARCH_BY_WXID))
     cfg.BUFFER_SECONDS = new_cfg.get("buffer_seconds", cfg.BUFFER_SECONDS)
     cfg.GROUP_REPLY_MODE = new_cfg.get("group_reply_mode", cfg.GROUP_REPLY_MODE)
     state.group_reply_mode = cfg.GROUP_REPLY_MODE

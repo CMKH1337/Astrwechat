@@ -470,8 +470,18 @@ def _resolve_reply_contact(action: str, params: dict):
     target_key = "group_id" if is_group else "user_id"
     raw_target_id = params.get(target_key, 0)
     target_id = _normalize_ob_target_id(raw_target_id)
-    contact = state._ob_id_to_contact.get(target_id, str(raw_target_id))
-    session_id = state._ob_group_id_to_session_id.get(target_id, "")
+    private_session_id = ""
+    if is_group:
+        session_id = state._ob_group_id_to_session_id.get(target_id, "")
+        contact = state._ob_id_to_contact.get(target_id, str(raw_target_id))
+    else:
+        private_session_id = state._ob_private_id_to_session_id.get(target_id, "")
+        contact = (
+            private_session_id
+            if config.SEARCH_BY_WXID and private_session_id
+            else state._ob_id_to_contact.get(target_id, str(raw_target_id))
+        )
+        session_id = private_session_id
     return is_group, target_id, contact, session_id
 
 

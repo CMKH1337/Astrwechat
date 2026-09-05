@@ -60,6 +60,7 @@ ACCESS_TOKEN = config["access_token"]
 ASTRBOT_ATTACHMENTS = config.get("astrbot_attachments", "")
 BOT_NICKNAMES = config["bot_nicknames"]
 BOT_WXID = config.get("bot_wxid", "")
+SEARCH_BY_WXID = bool(config.get("search_by_wxid", False))
 # 发送方式已固定为 UIA 纯键盘模拟
 BUFFER_SECONDS = config.get("buffer_seconds", 5)
 WEB_PORT = config.get("web_port", 8766)

@@ -27,7 +27,7 @@ try {
         throw "package.json was not found: $packageJsonPath"
     }
 
-    $package = Get-Content -LiteralPath $packageJsonPath -Raw | ConvertFrom-Json
+    $package = Get-Content -LiteralPath $packageJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $productName = if ($package.build.productName) { $package.build.productName } else { $package.name }
     $version = $package.version
 
@@ -58,12 +58,43 @@ try {
     $npmVersionText = (& npm.cmd --version).Trim()
     Write-Host "Node.js $nodeVersionText / npm $npmVersionText" -ForegroundColor DarkGray
 
-    if ($ForceInstall -or -not (Test-Path -LiteralPath (Join-Path $projectRoot 'node_modules'))) {
-        Write-Step 'Installing dependencies (npm ci)'
-        Invoke-Npm @('ci')
+    $workspaceRoot = Split-Path -Parent $projectRoot
+    $localFfmpegBinary = if ($env:WEFLOW_FFMPEG_BINARY) {
+        $env:WEFLOW_FFMPEG_BINARY
+    } else {
+        Join-Path $workspaceRoot 'node_modules\ffmpeg-static\ffmpeg.exe'
+    }
+    $localElectronDist = if ($env:WEFLOW_ELECTRON_DIST) {
+        $env:WEFLOW_ELECTRON_DIST
+    } else {
+        Join-Path $workspaceRoot 'node_modules\electron\dist'
+    }
+    $canReuseLocalBinaries = (
+        (Test-Path -LiteralPath $localFfmpegBinary) -and
+        (Test-Path -LiteralPath (Join-Path $localElectronDist 'electron.exe'))
+    )
+
+    $electronReady = Test-Path -LiteralPath (Join-Path $projectRoot 'node_modules\electron\package.json')
+    $builderReady = Test-Path -LiteralPath (Join-Path $projectRoot 'node_modules\electron-builder\out\cli\cli.js')
+    if ($ForceInstall -or -not $electronReady -or -not $builderReady) {
+        if ($canReuseLocalBinaries) {
+            Write-Step 'Installing dependencies without remote binary downloads'
+            Invoke-Npm @('ci', '--ignore-scripts')
+
+            $targetFfmpegBinary = Join-Path $projectRoot 'node_modules\ffmpeg-static\ffmpeg.exe'
+            Copy-Item -LiteralPath $localFfmpegBinary -Destination $targetFfmpegBinary -Force
+
+            $targetElectronDir = Join-Path $projectRoot 'node_modules\electron'
+            Copy-Item -LiteralPath $localElectronDist -Destination $targetElectronDir -Recurse -Force
+            Write-Host 'Reused local Electron and ffmpeg binaries.' -ForegroundColor DarkGray
+        }
+        else {
+            Write-Step 'Installing dependencies (npm ci)'
+            Invoke-Npm @('ci')
+        }
     }
     else {
-        Write-Host 'node_modules found; dependency installation skipped. Use -ForceInstall to reinstall.' -ForegroundColor DarkGray
+        Write-Host 'Build dependencies found; installation skipped. Use -ForceInstall to reinstall.' -ForegroundColor DarkGray
     }
 
     Write-Step 'Building frontend, Electron main process, and Windows installer'

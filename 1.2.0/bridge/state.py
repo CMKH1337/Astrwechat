@@ -91,6 +91,7 @@ bridge_lock = threading.Lock()
 sender_instance = None
 _ob_id_to_contact: dict[int, str] = {}  # OneBot user_id/group_id → 微信联系名
 _ob_group_id_to_session_id: dict[int, str] = {}  # group_id → @chatroom 会话 ID
+_ob_private_id_to_session_id: dict[int, str] = {}  # user_id → 私聊微信 ID
 ob_client_started = False
 ob_client_thread = None
 ob_client_generation = 0

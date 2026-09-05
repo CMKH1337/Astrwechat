@@ -180,6 +180,8 @@ class WeFlowBridge:
                 nickname=source_name or contact,
             )
             state._ob_id_to_contact[user_id] = contact
+            if session_id:
+                state._ob_private_id_to_session_id[user_id] = session_id
             route_label = contact
 
         sent = push_event(event)
@@ -614,6 +616,11 @@ class WeFlowBridge:
             state._ob_id_to_contact[group_id] = contact
         else:
             state._ob_id_to_contact[user_id] = contact
+            private_session_id = str(
+                entry.get("session_id_data") or contact
+            ).strip()
+            if private_session_id:
+                state._ob_private_id_to_session_id[user_id] = private_session_id
 
         sent = push_event(event)
         if sent:

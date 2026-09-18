@@ -1,0 +1,66 @@
+{
+  "name": "vite-plugin-electron-renderer",
+  "version": "1.0.0",
+  "description": "Support use Node.js API in Electron-Renderer",
+  "keywords": [
+    "electron",
+    "plugin",
+    "renderer",
+    "vite"
+  ],
+  "license": "MIT",
+  "author": "草鞋没号 <308487730@qq.com>",
+  "maintainers": [
+    "subframe7536"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/electron-vite/vite-plugin-electron-renderer.git"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./cjs-shim": {
+      "import": "./dist/cjs-shim.mjs",
+      "require": "./dist/cjs-shim.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "dev": "tsdown --watch",
+    "build": "tsdown",
+    "example": "pnpm --dir examples/quick-start dev",
+    "example:build": "pnpm --dir examples/quick-start build",
+    "example:store": "pnpm --dir examples/electron-store dev",
+    "example:store:build": "pnpm --dir examples/electron-store build",
+    "example:worker": "pnpm --dir examples/worker dev",
+    "example:worker:build": "pnpm --dir examples/worker build",
+    "lint": "oxlint --fix",
+    "format": "oxfmt",
+    "typecheck": "tsc --noEmit",
+    "qa": "pnpm lint && pnpm format && pnpm typecheck",
+    "test": "vitest run",
+    "prepublishOnly": "pnpm build && pnpm test",
+    "release": "pnpm qa && pnpm prepublishOnly && bumpp --all"
+  },
+  "devDependencies": {
+    "@subf/config": "^0.2.1",
+    "bumpp": "^11.1.0",
+    "oxfmt": "^0.51.0",
+    "oxlint": "^1.66.0",
+    "tsdown": "^0.22.0",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "^4.1.7"
+  },
+  "packageManager": "pnpm@10.33.4"
+}

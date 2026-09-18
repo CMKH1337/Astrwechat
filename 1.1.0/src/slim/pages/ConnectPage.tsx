@@ -3,10 +3,11 @@ import type { WxidInfo } from '../../types/electron'
 import '../AppSlim.scss'
 
 interface Props {
+  connected: boolean
   onConnected: (connected: boolean) => void
 }
 
-export default function ConnectPage({ onConnected }: Props) {
+export default function ConnectPage({ connected, onConnected }: Props) {
   const [dbPath, setDbPath] = useState('')
   const [decryptKey, setDecryptKey] = useState('')
   const [wxid, setWxid] = useState('')
@@ -14,8 +15,8 @@ export default function ConnectPage({ onConnected }: Props) {
   const [wxidScanning, setWxidScanning] = useState(false)
   const [wxidScanMessage, setWxidScanMessage] = useState('')
   const [wxidPickerOpen, setWxidPickerOpen] = useState(false)
-  const [status, setStatus] = useState<'idle' | 'testing' | 'ok' | 'err'>('idle')
-  const [statusMsg, setStatusMsg] = useState('')
+  const [status, setStatus] = useState<'idle' | 'testing' | 'ok' | 'err'>(connected ? 'ok' : 'idle')
+  const [statusMsg, setStatusMsg] = useState(connected ? '数据库已连接' : '')
   const [autoDetecting, setAutoDetecting] = useState(false)
   const [keyFetching, setKeyFetching] = useState(false)
   const [keyProgress, setKeyProgress] = useState('')
@@ -24,6 +25,12 @@ export default function ConnectPage({ onConnected }: Props) {
   const connectingRef = useRef(false)
   const wxidScanRequestRef = useRef(0)
   const wxidPickerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!connected) return
+    setStatus('ok')
+    setStatusMsg('数据库已连接')
+  }, [connected])
 
   const scanWxidDirectories = async (path: string) => {
     const normalizedPath = path.trim()
@@ -97,7 +104,14 @@ export default function ConnectPage({ onConnected }: Props) {
       if (savedKey) setDecryptKey(String(savedKey))
       if (savedWxid) setWxid(String(savedWxid))
 
-      // 页面切换回来时先检查后台 WCDB 状态，避免对同一个账号重复 open。
+      // 父级已知连接状态时直接显示，不等待 Worker 响应。
+      if (connected) {
+        setStatus('ok')
+        setStatusMsg('数据库已连接')
+        return
+      }
+
+      // 仅在父级状态未知时查询后台 WCDB；这只是读取状态，不会重新 open 数据库。
       const alreadyConnected = await window.electronAPI.wcdb.isConnected().catch(() => false)
       if (alreadyConnected) {
         setStatus('ok')

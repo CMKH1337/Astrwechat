@@ -29,7 +29,6 @@ BUFFER_SECONDS = config.get("buffer_seconds", 5)
 WEB_PORT = config.get("web_port", 8766)
 GROUP_REPLY_MODE = config.get("group_reply_mode", "mention")  # "mention" / "all"
 ACTIVE_REPLY_ENABLED = bool(config.get("active_reply_enabled", False))
-ACTIVE_REPLY_METHOD = str(config.get("active_reply_method", "possibility_reply") or "possibility_reply")
 try:
     ACTIVE_REPLY_PROBABILITY = min(1.0, max(0.0, float(config.get("active_reply_probability", 0.1))))
 except (TypeError, ValueError):

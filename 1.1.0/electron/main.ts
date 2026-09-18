@@ -3101,9 +3101,12 @@ function registerIpcHandlers() {
     const dir = bridgeManager.getBridgeDir()
     const cfgPath = join(dir, 'config.json')
     try {
-      await writeFile(cfgPath, JSON.stringify(cfg, null, 4), 'utf8')
+      // Drop the removed legacy sampling-method setting when older config
+      // files are saved by a newer UI.
+      const { active_reply_method: _legacyMethod, ...cleanConfig } = cfg
+      await writeFile(cfgPath, JSON.stringify(cleanConfig, null, 4), 'utf8')
       // 如果 bridge 进程在运行，推送热更新
-      bridgeManager.send({ cmd: 'update_config', config: cfg })
+      bridgeManager.send({ cmd: 'update_config', config: cleanConfig })
       return { success: true }
     } catch (e) {
       return { success: false, error: String(e) }

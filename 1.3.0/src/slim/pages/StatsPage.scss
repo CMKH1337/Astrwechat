@@ -1,0 +1,19 @@
+.stats-toolbar {
+  flex-wrap: wrap;
+}
+
+.stats-scope-control {
+  flex-shrink: 0;
+  button:disabled { cursor: wait; opacity: .65; }
+}
+
+.stats-scope-hint {
+  margin: -6px 0 0;
+  color: #777;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+@media (max-width: 520px) {
+  .stats-scope-control { flex-wrap: wrap; }
+}

@@ -1,0 +1,26 @@
+.aw-config-page {
+  max-width: 980px;
+
+  &__intro {
+    margin-bottom: 18px;
+    h2 { margin: 0 0 7px; color: var(--slim-text); font-size: 16px; font-weight: 650; }
+    p { margin: 0; color: var(--slim-text-muted); font-size: 12px; line-height: 1.7; }
+  }
+
+  &__state { padding: 24px; color: var(--slim-text-muted); }
+  &__state--error { color: var(--danger); }
+
+  &__actions {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 14px;
+    padding: 14px 0 4px;
+    background: linear-gradient(180deg, transparent, var(--slim-bg) 32%);
+    span { color: var(--slim-text-muted); font-size: 12px; }
+    span.is-dirty { color: var(--warning); }
+    span.is-error { color: var(--danger); }
+  }
+}

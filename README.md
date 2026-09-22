@@ -1,4 +1,4 @@
-# AstrWeChat
+# AstrWeChat  [![Community](https://img.shields.io/badge/QQ群-917932291-12B7F3?style=for-the-badge&logo=tencentqq)]()
 
 <p align="center">
   <img src="1.1.0/icon.png" alt="AstrWeChat" width="128" height="128">

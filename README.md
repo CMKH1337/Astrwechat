@@ -26,8 +26,7 @@ AstrWeChat 用于读取本机微信数据、提供本地 HTTP API 和新消息�
 
 | 版本 | 文件 | 使用方式 |
 | --- | --- | --- |
-| Windows 安装版 | `AstrWeChat-1.1.0--windows-amd64-Setup.exe` | 运行安装程序，根据提示完成安装 |
-| Windows 免安装版 | `AstrWeChat-1.1.0-Portable.zip` | 解压到独立目录，运行 `WeFlow.exe` |
+| Windows 安装版 | `AstrWeChat-1.1.0-Setup.exe` | 运行安装程序，根据提示完成安装 |
 
 ## 主要功能
 
@@ -43,80 +42,6 @@ AstrWeChat 用于读取本机微信数据、提供本地 HTTP API 和新消息�
 - Bridge 状态、运行日志和配置管理
 - 开机启动、静默启动、通知和日志设置
 - 一键重置数据库、HTTP API、Bridge 和本地应用配置
-
-## 工作流程
-
-### 常规消息
-```text
-微信客户端收到消息
-    │
-    ▼
-微信本地数据库
-    │
-    ▼
-AstrWeChat HTTP API + SSE
-    │
-    ▼
-OneBot v11 Bridge
-    │
-    ▼
-AstrBot
-    │
-    └── 回复 ──► Windows UI Automation ──► 微信客户端
-```
-
-### 图片消息
-```text
-微信客户端收到图片
-    │
-    ▼
-微信写入本地消息数据库与图片缓存
-    │
-    ▼
-AstrWeChat / WCDB 检测到新消息
-    │
-    ▼
-MessagePushService 识别图片消息
-content = [图片]
-    │
-    ▼
-AstrWeChat HTTP API + SSE 推送 message.new
-    │
-    ▼
-OneBot v11 Bridge 接收图片事件
-    │
-    ├── 群聊 mention 模式且未 @ 机器人
-    │       │
-    │       ▼
-    │   暂存图片，等待后续关联的 @ 指令
-    │
-    ▼
-按 serverId / localId / 时间定位原始媒体消息
-    │
-    ▼
-请求媒体接口并获取 mediaUrl
-    │
-    ▼
-AstrWeChat 解密 / 导出图片缓存
-    │
-    ▼
-Bridge 下载图片到本地
-    │
-    ▼
-编码为 OneBot image 段
-base64://...
-    │
-    ▼
-图片占位文本 + 图片段加入消息缓冲
-    │
-    ▼
-OneBot v11 Bridge 推送给 AstrBot
-    │
-    ▼
-AstrBot 接收图片并生成回复
-    │
-    └── 回复 ──► Windows UI Automation ──► 微信客户端
-```
 
 ## 使用要求
 
@@ -299,16 +224,6 @@ npm.cmd run build
 3. AstrWeChat HTTP API 是否已经启动。
 4. Access Token 是否一致。
 5. AstrBot 的 OneBot v11 WebSocket 地址是否正确。
-
-### 免安装版应该运行哪个文件
-
-解压后运行：
-
-```text
-WeFlow.exe
-```
-
-请保留解压后的完整目录结构，不要只复制 EXE 文件。
 
 ## 数据与安全
 

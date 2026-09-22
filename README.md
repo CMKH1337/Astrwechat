@@ -225,6 +225,12 @@ npm.cmd run build
 4. Access Token 是否一致。
 5. AstrBot 的 OneBot v11 WebSocket 地址是否正确。
 
+### UIA sender未就绪
+
+检查：
+
+是否正确安装了模块: uiautomation
+
 ## 数据与安全
 
 - 数据库密钥、Access Token 和微信 ID 属于敏感信息，请勿公开分享。

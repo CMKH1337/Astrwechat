@@ -237,3 +237,9 @@ npm.cmd run build
 - `bridge/config.json` 是本地运行配置，不应提交到公共仓库。
 - 默认服务只监听 `127.0.0.1`。如需监听局域网地址，请设置强 Access Token 并自行配置防火墙。
 - 一键重置会停止相关服务并清除本地配置，请在操作前确认不再需要这些信息。
+
+## 打个小广告
+
+感谢HHAPI提供的token。如果需要一个合适的API服务，可以试试~使用我的邀请码注册系统赠送两刀额度[j6U0]
+
+[![hhapi](https://img.shields.io/badge/🚀_立即注册-hhapi.xyz-brightgreen?style=for-the-badge)](https://hhapi.xyz/sign-up?aff=j6U0)

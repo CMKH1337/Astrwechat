@@ -1,0 +1,122 @@
+Original Windows x64 wcdb_api.dll host-name comparison; read-only disassembly.
+Image base: 0x180000000
+Source SHA256: 6397760da70de8062829fbe6a2ec01cf0616d6f2b334e6fe54873898f38f7ad7
+VA=0x18006d660 file=0x6ca60 0fbe0b                   movsx ecx, byte ptr [rbx]
+VA=0x18006d663 file=0x6ca63 ff1557770a00             call qword ptr [rip + 0xa7757]
+VA=0x18006d669 file=0x6ca69 4188041f                 mov byte ptr [r15 + rbx], al
+VA=0x18006d66d file=0x6ca6d 48ffc3                   inc rbx
+VA=0x18006d670 file=0x6ca70 493bdc                   cmp rbx, r12
+VA=0x18006d673 file=0x6ca73 75eb                     jne 0x18006d660
+VA=0x18006d675 file=0x6ca75 488b75d0                 mov rsi, qword ptr [rbp - 0x30]
+VA=0x18006d679 file=0x6ca79 488b7dc8                 mov rdi, qword ptr [rbp - 0x38]
+VA=0x18006d67d file=0x6ca7d 4c8b75b8                 mov r14, qword ptr [rbp - 0x48]
+VA=0x18006d681 file=0x6ca81 488d45b8                 lea rax, [rbp - 0x48]
+VA=0x18006d685 file=0x6ca85 4883fe0f                 cmp rsi, 0xf
+VA=0x18006d689 file=0x6ca89 490f47c6                 cmova rax, r14
+VA=0x18006d68d file=0x6ca8d 33db                     xor ebx, ebx
+VA=0x18006d68f file=0x6ca8f 4883ff0c                 cmp rdi, 0xc
+VA=0x18006d693 file=0x6ca93 7526                     jne 0x18006d6bb
+VA=0x18006d695 file=0x6ca95 488b08                   mov rcx, qword ptr [rax]
+VA=0x18006d698 file=0x6ca98 48ba656c656374726f6e     movabs rdx, 0x6e6f727463656c65
+VA=0x18006d6a2 file=0x6caa2 482bca                   sub rcx, rdx
+VA=0x18006d6a5 file=0x6caa5 750b                     jne 0x18006d6b2
+VA=0x18006d6a7 file=0x6caa7 8b4808                   mov ecx, dword ptr [rax + 8]
+VA=0x18006d6aa file=0x6caaa b82e657865               mov eax, 0x6578652e
+VA=0x18006d6af file=0x6caaf 482bc8                   sub rcx, rax
+VA=0x18006d6b2 file=0x6cab2 4885c9                   test rcx, rcx
+VA=0x18006d6b5 file=0x6cab5 0f8450010000             je 0x18006d80b
+VA=0x18006d6bb file=0x6cabb 488d45b8                 lea rax, [rbp - 0x48]
+VA=0x18006d6bf file=0x6cabf 4883fe0f                 cmp rsi, 0xf
+VA=0x18006d6c3 file=0x6cac3 490f47c6                 cmova rax, r14
+VA=0x18006d6c7 file=0x6cac7 41b978650000             mov r9d, 0x6578
+VA=0x18006d6cd file=0x6cacd 4883ff0a                 cmp rdi, 0xa
+VA=0x18006d6d1 file=0x6cad1 7526                     jne 0x18006d6f9
+VA=0x18006d6d3 file=0x6cad3 488b08                   mov rcx, qword ptr [rax]
+VA=0x18006d6d6 file=0x6cad6 48ba7765666c6f772e65     movabs rdx, 0x652e776f6c666577
+VA=0x18006d6e0 file=0x6cae0 482bca                   sub rcx, rdx
+VA=0x18006d6e3 file=0x6cae3 750b                     jne 0x18006d6f0
+VA=0x18006d6e5 file=0x6cae5 0fb74808                 movzx ecx, word ptr [rax + 8]
+VA=0x18006d6e9 file=0x6cae9 410fb7c1                 movzx eax, r9w
+VA=0x18006d6ed file=0x6caed 482bc8                   sub rcx, rax
+VA=0x18006d6f0 file=0x6caf0 4885c9                   test rcx, rcx
+VA=0x18006d6f3 file=0x6caf3 0f8412010000             je 0x18006d80b
+VA=0x18006d6f9 file=0x6caf9 488d45b8                 lea rax, [rbp - 0x48]
+VA=0x18006d6fd file=0x6cafd 4883fe0f                 cmp rsi, 0xf
+VA=0x18006d701 file=0x6cb01 490f47c6                 cmova rax, r14
+VA=0x18006d705 file=0x6cb05 4883ff06                 cmp rdi, 6
+VA=0x18006d709 file=0x6cb09 751d                     jne 0x18006d728
+VA=0x18006d70b file=0x6cb0b 8b08                     mov ecx, dword ptr [rax]
+VA=0x18006d70d file=0x6cb0d 81e97765666c             sub ecx, 0x6c666577
+VA=0x18006d713 file=0x6cb13 750b                     jne 0x18006d720
+VA=0x18006d715 file=0x6cb15 0fb74804                 movzx ecx, word ptr [rax + 4]
+VA=0x18006d719 file=0x6cb19 b86f770000               mov eax, 0x776f
+VA=0x18006d71e file=0x6cb1e 2bc8                     sub ecx, eax
+VA=0x18006d720 file=0x6cb20 85c9                     test ecx, ecx
+VA=0x18006d722 file=0x6cb22 0f84e3000000             je 0x18006d80b
+VA=0x18006d728 file=0x6cb28 488d55b8                 lea rdx, [rbp - 0x48]
+VA=0x18006d72c file=0x6cb2c 4883fe0f                 cmp rsi, 0xf
+VA=0x18006d730 file=0x6cb30 490f47d6                 cmova rdx, r14
+VA=0x18006d734 file=0x6cb34 49b86369706865727461     movabs r8, 0x6174726568706963
+VA=0x18006d73e file=0x6cb3e 4883ff0e                 cmp rdi, 0xe
+VA=0x18006d742 file=0x6cb42 7529                     jne 0x18006d76d
+VA=0x18006d744 file=0x6cb44 488b0a                   mov rcx, qword ptr [rdx]
+VA=0x18006d747 file=0x6cb47 492bc8                   sub rcx, r8
+VA=0x18006d74a file=0x6cb4a 7518                     jne 0x18006d764
+VA=0x18006d74c file=0x6cb4c 8b4a08                   mov ecx, dword ptr [rdx + 8]
+VA=0x18006d74f file=0x6cb4f b86c6b2e65               mov eax, 0x652e6b6c
+VA=0x18006d754 file=0x6cb54 482bc8                   sub rcx, rax
+VA=0x18006d757 file=0x6cb57 750b                     jne 0x18006d764
+VA=0x18006d759 file=0x6cb59 0fb74a0c                 movzx ecx, word ptr [rdx + 0xc]
+VA=0x18006d75d file=0x6cb5d 410fb7c1                 movzx eax, r9w
+VA=0x18006d761 file=0x6cb61 482bc8                   sub rcx, rax
+VA=0x18006d764 file=0x6cb64 4885c9                   test rcx, rcx
+VA=0x18006d767 file=0x6cb67 0f849e000000             je 0x18006d80b
+VA=0x18006d76d file=0x6cb6d 488d45b8                 lea rax, [rbp - 0x48]
+VA=0x18006d771 file=0x6cb71 4883fe0f                 cmp rsi, 0xf
+VA=0x18006d775 file=0x6cb75 490f47c6                 cmova rax, r14
+VA=0x18006d779 file=0x6cb79 4883ff0a                 cmp rdi, 0xa
+VA=0x18006d77d file=0x6cb7d 751c                     jne 0x18006d79b
+VA=0x18006d77f file=0x6cb7f 488b08                   mov rcx, qword ptr [rax]
+VA=0x18006d782 file=0x6cb82 492bc8                   sub rcx, r8
+VA=0x18006d785 file=0x6cb85 750f                     jne 0x18006d796
+VA=0x18006d787 file=0x6cb87 0fb74808                 movzx ecx, word ptr [rax + 8]
+VA=0x18006d78b file=0x6cb8b b86c6b0000               mov eax, 0x6b6c
+VA=0x18006d790 file=0x6cb90 0fb7c0                   movzx eax, ax
+VA=0x18006d793 file=0x6cb93 482bc8                   sub rcx, rax
+VA=0x18006d796 file=0x6cb96 4885c9                   test rcx, rcx
+VA=0x18006d799 file=0x6cb99 7470                     je 0x18006d80b
+VA=0x18006d79b file=0x6cb9b 488d4db8                 lea rcx, [rbp - 0x48]
+VA=0x18006d79f file=0x6cb9f 4883fe0f                 cmp rsi, 0xf
+VA=0x18006d7a3 file=0x6cba3 490f47ce                 cmova rcx, r14
+VA=0x18006d7a7 file=0x6cba7 4883ff16                 cmp rdi, 0x16
+VA=0x18006d7ab file=0x6cbab 7513                     jne 0x18006d7c0
+VA=0x18006d7ad file=0x6cbad 4c8bc7                   mov r8, rdi
+VA=0x18006d7b0 file=0x6cbb0 488d1571850a00           lea rdx, [rip + 0xa8571]
+VA=0x18006d7b7 file=0x6cbb7 e8f4750900               call 0x180104db0
+VA=0x18006d7bc file=0x6cbbc 85c0                     test eax, eax
+VA=0x18006d7be file=0x6cbbe 744b                     je 0x18006d80b
+VA=0x18006d7c0 file=0x6cbc0 488d45b8                 lea rax, [rbp - 0x48]
+VA=0x18006d7c4 file=0x6cbc4 4883fe0f                 cmp rsi, 0xf
+VA=0x18006d7c8 file=0x6cbc8 490f47c6                 cmova rax, r14
+VA=0x18006d7cc file=0x6cbcc 4883ff12                 cmp rdi, 0x12
+VA=0x18006d7d0 file=0x6cbd0 7544                     jne 0x18006d816
+VA=0x18006d7d2 file=0x6cbd2 488b08                   mov rcx, qword ptr [rax]
+VA=0x18006d7d5 file=0x6cbd5 48ba7765636861746461     movabs rdx, 0x6164746168636577
+VA=0x18006d7df file=0x6cbdf 482bca                   sub rcx, rdx
+VA=0x18006d7e2 file=0x6cbe2 7522                     jne 0x18006d806
+VA=0x18006d7e4 file=0x6cbe4 488b4808                 mov rcx, qword ptr [rax + 8]
+VA=0x18006d7e8 file=0x6cbe8 48ba7461616e616c7973     movabs rdx, 0x73796c616e616174
+VA=0x18006d7f2 file=0x6cbf2 482bca                   sub rcx, rdx
+VA=0x18006d7f5 file=0x6cbf5 750f                     jne 0x18006d806
+VA=0x18006d7f7 file=0x6cbf7 0fb74810                 movzx ecx, word ptr [rax + 0x10]
+VA=0x18006d7fb file=0x6cbfb b869730000               mov eax, 0x7369
+VA=0x18006d800 file=0x6cc00 0fb7c0                   movzx eax, ax
+VA=0x18006d803 file=0x6cc03 482bc8                   sub rcx, rax
+VA=0x18006d806 file=0x6cc06 4885c9                   test rcx, rcx
+VA=0x18006d809 file=0x6cc09 750b                     jne 0x18006d816
+VA=0x18006d80b file=0x6cc0b c60582e60d0001           mov byte ptr [rip + 0xde682], 1
+VA=0x18006d812 file=0x6cc12 8bc3                     mov eax, ebx
+VA=0x18006d814 file=0x6cc14 eb05                     jmp 0x18006d81b
+VA=0x18006d816 file=0x6cc16 b802000000               mov eax, 2
+VA=0x18006d81b file=0x6cc1b 8905dfb70d00             mov dword ptr [rip + 0xdb7df], eax
+VA=0x18006d821 file=0x6cc21 4883fe0f                 cmp rsi, 0xf

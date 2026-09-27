@@ -242,4 +242,4 @@ npm.cmd run build
 
 感谢HHAPI提供的token。如果需要一个合适的API服务，可以试试~使用我的邀请码注册系统赠送两刀额度[j6U0]
 
-[![hhapi](https://img.shields.io/badge/🚀_立即注册-hhapi.xyz-brightgreen?style=for-the-badge)](https://hhapi.xyz/sign-up?aff=j6U0)
+[![HHapi](https://img.shields.io/badge/🚀_立即注册-hhapi.xyz-brightgreen?style=for-the-badge)](https://hhapi.xyz/sign-up?aff=j6U0)

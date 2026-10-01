@@ -1,0 +1,6 @@
+{
+  "status": "not_completed",
+  "reason": "Windows requireAdministrator executable could not be launched from the unelevated parent (EACCES); the subsequent normal UAC elevation request was cancelled by the user. No elevation bypass was attempted.",
+  "actual_database_tested": false,
+  "installer_run": false
+}

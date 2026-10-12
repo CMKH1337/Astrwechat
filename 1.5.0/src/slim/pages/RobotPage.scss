@@ -1,0 +1,118 @@
+.robot-backend-control {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: min(100%, 420px);
+  gap: 4px;
+  padding: 4px;
+  background: #f0f0f0;
+  border: 1px solid #e9e9e9;
+  border-radius: 12px;
+}
+
+.robot-backend-segment {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  color: var(--slim-text-muted);
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color .18s ease, color .18s ease, box-shadow .18s ease;
+}
+
+.robot-backend-segment input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.robot-backend-segment__label {
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.robot-backend-segment:hover {
+  color: var(--slim-text);
+  background: rgba(255, 255, 255, .55);
+}
+
+.robot-backend-segment.is-selected {
+  color: var(--slim-text);
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .09);
+}
+
+.robot-backend-segment:has(input:focus-visible) {
+  outline: 2px solid var(--slim-accent-strong);
+  outline-offset: 2px;
+}
+
+.robot-backend-segment:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+.robot-backend-hint {
+  min-height: 20px;
+  margin: 12px 0 20px;
+  color: var(--slim-text-muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.robot-page .bridge-connection-groups {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.robot-page .bridge-connection-group__heading > strong {
+  color: var(--slim-text);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .robot-backend-segment {
+    transition: none;
+  }
+}
+
+// Robot configuration is page content, not nested cards.
+.robot-connections {
+  min-width: 0;
+  margin-bottom: 22px;
+}
+
+.robot-connections__title {
+  margin: 0 0 12px;
+  color: var(--slim-text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.robot-connection-config {
+  min-width: 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--slim-border);
+}
+
+.robot-page .bridge-segment-options {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  margin: 24px 0;
+}
+
+.robot-page .bridge-segment-options legend {
+  padding: 0;
+  margin-bottom: 14px;
+}

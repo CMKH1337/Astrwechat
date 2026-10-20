@@ -243,3 +243,13 @@ npm.cmd run build
 感谢HHAPI提供的token。如果需要一个合适的API服务，可以试试~使用我的邀请码注册系统赠送两刀额度[j6U0]
 
 [![HHapi](https://img.shields.io/badge/🚀_立即注册-hhapi.xyz-brightgreen?style=for-the-badge)](https://hhapi.xyz/sign-up?aff=j6U0)
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=cmkh1337%2Fastrwechat&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=cmkh1337/astrwechat&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=cmkh1337/astrwechat&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=cmkh1337/astrwechat&type=date&legend=top-left" />
+ </picture>
+</a>

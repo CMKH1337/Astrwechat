@@ -1,7 +1,7 @@
 {
   "name": "astrwechat",
   "version": "1.1.0",
-  "description": "云原神启动器",
+  "description": "\u4e91\u539f\u795e\u542f\u52a8\u5668",
   "main": "dist-electron/main.js",
   "scripts": {
     "postinstall": "electron-builder install-app-deps && node scripts/prepare-electron-runtime.cjs",
@@ -274,9 +274,7 @@
     "executableName": "WeFlow"
   },
   "overrides": {
-    "brace-expansion": {
-      ".": "^5.0.6"
-    },
+    "brace-expansion": "5.0.9",
     "node-abi": ">=4.33.0",
     "exceljs": {
       "uuid": "11.1.1"

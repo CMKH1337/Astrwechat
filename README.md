@@ -26,7 +26,7 @@ AstrWeChat 用于读取本机微信数据、提供本地 HTTP API 和新消息�
 
 | 版本 | 文件 | 使用方式 |
 | --- | --- | --- |
-| Windows 安装版 | `AstrWeChat-1.1.0-Setup.exe` | 运行安装程序，根据提示完成安装 |
+| Windows 安装版 | `AstrWeChat-1.5.0-Setup.exe` | 运行安装程序，根据提示完成安装 |
 
 ## 主要功能
 
@@ -111,11 +111,6 @@ Bridge 负责将 AstrWeChat 的消息转成 OneBot v11 事件，并通过反向 
 python -m pip install -r bridge/requirements.txt
 ```
 
-配置完成后，在 Bridge 页面点击启动，并确认：
-
-- [INFO] ✅ 已连接到 WeFlow 推送
-- [INFO] ✅ 已连接到 Astrbot
-
 ## 从源码运行
 
 克隆仓库：
@@ -137,46 +132,6 @@ npm install
 python -m pip install -r bridge/requirements.txt
 ```
 
-启动开发环境：
-
-```powershell
-npm run electron:dev
-```
-
-也可以在 Windows 中运行：
-
-```text
-start.bat
-```
-
-该脚本会检查 Node.js、npm 和 Python，并安装缺失依赖后启动程序。
-
-## 构建
-
-类型检查：
-
-```powershell
-npm run typecheck
-```
-
-构建桌面程序和安装包：
-
-```powershell
-npm run build
-```
-
-检查 WCDB 原生运行环境：
-
-```powershell
-npm run wcdb:probe
-```
-
-构建产物默认位于：
-
-```text
-release/
-```
-
 ## 项目结构
 
 ```text
@@ -192,28 +147,9 @@ scripts/         构建、启动和诊断脚本
 
 ## 常见问题
 
-### 安装版提示 WCDB 初始化失败
+### 连接不上数据库/连接后新消息不推送等
 
-请确认使用的是最新 Release。安装版内部必须通过 `WeFlow.exe` 启动，以满足 WCDB 原生组件的兼容要求。不要将该文件手动改名为 `AstrWeChat.exe`。
-
-可以在源码目录运行以下命令诊断：
-
-```powershell
-npm run wcdb:probe
-```
-
-正常结果应显示主进程、普通 Worker 和正式构建 Worker 均可初始化 WCDB。
-
-### PowerShell 无法运行 npm
-
-如果系统禁止运行 `npm.ps1`，请使用：
-
-```powershell
-npm.cmd install
-npm.cmd run build
-```
-
-或者在 CMD 中运行相同的 npm 命令。
+优先检查数据库路径是否正确或包含中文。路径可以在微信设置中看到
 
 ### Bridge 无法启动
 
@@ -227,9 +163,7 @@ npm.cmd run build
 
 ### UIA sender未就绪
 
-检查：
-
-是否正确安装了模块: uiautomation
+检查所有模块是否都有安装，日子会提示缺失的模块（如有）
 
 ## 数据与安全
 

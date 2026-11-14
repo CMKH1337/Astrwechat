@@ -1,0 +1,141 @@
+{
+  "dllDir": "C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\release\\branding-1.3.1\\win-unpacked\\resources\\resources\\wcdb\\win32\\x64",
+  "dllSha256": "2630fe8140957384bdae19721fbff8c0ac7874cf1a72a23f1537555dbffe8ed7",
+  "results": [
+    {
+      "exe": "electron.exe",
+      "context": "main",
+      "exitCode": 0,
+      "protectionRc": 0,
+      "initRc": 0,
+      "logs": "[\"2026-09-19 18:27:33.661 wcdb_init [SecurityStatus:0]\"]",
+      "execPath": "C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\tmp\\branding-probe\\packaged-exe-runtime\\electron.exe",
+      "isMainThread": true,
+      "appName": "AstrWeChat",
+      "userData": "C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\tmp\\branding-probe\\profiles\\packaged-full-electron.exe-main",
+      "passed": true
+    },
+    {
+      "exe": "electron.exe",
+      "context": "worker",
+      "exitCode": 0,
+      "protectionRc": 0,
+      "initRc": 0,
+      "logs": "[\"2026-09-19 18:27:34.013 wcdb_init [SecurityStatus:0]\"]",
+      "execPath": "C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\tmp\\branding-probe\\packaged-exe-runtime\\electron.exe",
+      "isMainThread": false,
+      "appName": "AstrWeChat",
+      "userData": "C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\tmp\\branding-probe\\profiles\\packaged-full-electron.exe-worker",
+      "passed": true
+    },
+    {
+      "exe": "electron.exe",
+      "context": "bundled-worker",
+      "exitCode": 0,
+      "success": true,
+      "nativeError": "",
+      "workerPath": "C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\release\\branding-1.3.1\\win-unpacked\\resources\\app.asar\\dist-electron\\wcdbWorker.js",
+      "execPath": "C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\tmp\\branding-probe\\packaged-exe-runtime\\electron.exe",
+      "appName": "AstrWeChat",
+      "userData": "C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\tmp\\branding-probe\\profiles\\packaged-full-electron.exe-bundled-worker",
+      "passed": true
+    },
+    {
+      "exe": "WeFlow.exe",
+      "context": "main",
+      "exitCode": 0,
+      "protectionRc": 0,
+      "initRc": 0,
+      "logs": "[\"2026-09-19 18:27:35.675 wcdb_init [SecurityStatus:0]\"]",
+      "execPath": "C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\tmp\\branding-probe\\packaged-exe-runtime\\WeFlow.exe",
+      "isMainThread": true,
+      "appName": "AstrWeChat",
+      "userData": "C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\tmp\\branding-probe\\profiles\\packaged-full-WeFlow.exe-main",
+      "passed": true
+    },
+    {
+      "exe": "WeFlow.exe",
+      "context": "worker",
+      "exitCode": 0,
+      "protectionRc": 0,
+      "initRc": 0,
+      "logs": "[\"2026-09-19 18:27:35.964 wcdb_init [SecurityStatus:0]\"]",
+      "execPath": "C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\tmp\\branding-probe\\packaged-exe-runtime\\WeFlow.exe",
+      "isMainThread": false,
+      "appName": "AstrWeChat",
+      "userData": "C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\tmp\\branding-probe\\profiles\\packaged-full-WeFlow.exe-worker",
+      "passed": true
+    },
+    {
+      "exe": "WeFlow.exe",
+      "context": "bundled-worker",
+      "exitCode": 0,
+      "success": true,
+      "nativeError": "",
+      "workerPath": "C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\release\\branding-1.3.1\\win-unpacked\\resources\\app.asar\\dist-electron\\wcdbWorker.js",
+      "execPath": "C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\tmp\\branding-probe\\packaged-exe-runtime\\WeFlow.exe",
+      "appName": "AstrWeChat",
+      "userData": "C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\tmp\\branding-probe\\profiles\\packaged-full-WeFlow.exe-bundled-worker",
+      "passed": true
+    },
+    {
+      "exe": "AstrWeChat.exe",
+      "context": "main",
+      "exitCode": null,
+      "error": "spawnSync C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\tmp\\branding-probe\\packaged-exe-runtime\\AstrWeChat.exe EACCES",
+      "passed": false
+    },
+    {
+      "exe": "AstrWeChat.exe",
+      "context": "worker",
+      "exitCode": null,
+      "error": "spawnSync C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\tmp\\branding-probe\\packaged-exe-runtime\\AstrWeChat.exe EACCES",
+      "passed": false
+    },
+    {
+      "exe": "AstrWeChat.exe",
+      "context": "bundled-worker",
+      "exitCode": null,
+      "error": "spawnSync C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\tmp\\branding-probe\\packaged-exe-runtime\\AstrWeChat.exe EACCES",
+      "passed": false
+    },
+    {
+      "exe": "Unrelated.exe",
+      "context": "main",
+      "exitCode": 1,
+      "protectionRc": 0,
+      "initRc": -1006,
+      "logs": "[\"2026-09-19 18:27:38.444 wcdb_init [SecurityStatus:2]\"]",
+      "execPath": "C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\tmp\\branding-probe\\packaged-exe-runtime\\Unrelated.exe",
+      "isMainThread": true,
+      "appName": "AstrWeChat",
+      "userData": "C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\tmp\\branding-probe\\profiles\\packaged-full-Unrelated.exe-main",
+      "passed": true
+    },
+    {
+      "exe": "Unrelated.exe",
+      "context": "worker",
+      "exitCode": 1,
+      "protectionRc": 0,
+      "initRc": -1006,
+      "logs": "[\"2026-09-19 18:27:38.714 wcdb_init [SecurityStatus:2]\"]",
+      "execPath": "C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\tmp\\branding-probe\\packaged-exe-runtime\\Unrelated.exe",
+      "isMainThread": false,
+      "appName": "AstrWeChat",
+      "userData": "C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\tmp\\branding-probe\\profiles\\packaged-full-Unrelated.exe-worker",
+      "passed": true
+    },
+    {
+      "exe": "Unrelated.exe",
+      "context": "bundled-worker",
+      "exitCode": 1,
+      "success": false,
+      "nativeError": "WCDB 核心初始化失败，原生安全校验未通过 (SecurityStatus:2)。请运行 npm run wcdb:probe，进一步检查正式应用与独立 Worker 的启动环境差异。 (错误码: -1006)",
+      "workerPath": "C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\release\\branding-1.3.1\\win-unpacked\\resources\\app.asar\\dist-electron\\wcdbWorker.js",
+      "execPath": "C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\tmp\\branding-probe\\packaged-exe-runtime\\Unrelated.exe",
+      "appName": "AstrWeChat",
+      "userData": "C:\\Users\\tiger\\Desktop\\WeFlow-slim\\1.3.1\\tmp\\branding-probe\\profiles\\packaged-full-Unrelated.exe-bundled-worker",
+      "passed": true
+    }
+  ]
+}

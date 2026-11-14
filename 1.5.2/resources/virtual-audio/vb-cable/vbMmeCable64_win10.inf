@@ -1,0 +1,319 @@
+;
+; vbaudio_cable.inx
+;
+
+[Version]
+Signature="$WINDOWS NT$"
+Class=MEDIA
+ClassGUID={4d36e96c-e325-11ce-bfc1-08002be10318}
+Provider=%ManufacturerName%
+DriverVer = 10/07/2024,3.3.1.7
+CatalogFile=vbaudio_cable64_win10.cat
+PnpLockdown=1
+
+;This template is supported for OS version 17763 (Windows 10 version 1809) and after.
+;For Windows OS prior to Windows 10 1809 set DefaultDestDir = 12
+;To ensure that file operations always occur in the correct directory, an INF file that includes Include and Needs entries should not specify a default destination directory
+[DestinationDirs]
+DefaultDestDir = 13 ; 13=Package's DriverStore directory
+;DefaultDestDir = 12
+;VBCableInst.CopyList=12
+
+
+[SourceDisksNames]
+;1 = %DiskName%,,,""
+222 = %DiskName%,"",222
+
+[SourceDisksFiles]
+vbaudio_cable64_win10.sys=222
+vbaudio_cable64arm_win10.sys=222
+
+[Manufacturer]
+%ManufacturerName%=VBAudioVACWDM,NTamd64.10.0...16299,NTARM64.10.0...16299
+
+[VBAudioVACWDM.NTamd64.10.0...16299]
+%DeviceName%=VBCableInst.NTamd64,%HardwareId%
+
+[VBAudioVACWDM.NTARM64.10.0...16299]
+%DeviceName%=VBCableInst.NTARM64,%HardwareId%
+
+
+;======================================================
+; VBCableInst .NTamd64
+;======================================================
+
+[VBCableInst.NTamd64]
+Include=ks.inf,wdmaudio.inf
+Needs=KS.Registration, WDMAUDIO.Registration
+CopyFiles=VBCableInst.NTamd64.CopyList
+AddReg=VBCableInst.NTamd64.AddReg
+
+[VBCableInst.NTamd64.CopyList]
+vbaudio_cable64_win10.sys
+
+[VBCableInst.NTamd64.AddReg]
+;HKR,,AssociatedFilters,,"wdmaud,swmidi,redbook"
+HKR,,AssociatedFilters,,"wdmaud,redbook"
+HKR,,Driver,,%DriverFile_amd64%
+
+
+HKR,Drivers,SubClasses,,"wave,mixer"
+
+HKR,Drivers\wave\wdmaud.drv,Driver,,wdmaud.drv
+;HKR,Drivers\midi\wdmaud.drv,Driver,,wdmaud.drv
+HKR,Drivers\mixer\wdmaud.drv,Driver,,wdmaud.drv
+
+HKR,Drivers\wave\wdmaud.drv,Description,,%DeviceName%
+;HKR,Drivers\midi\wdmaud.drv,Description,,%DeviceName_MIDI%
+HKR,Drivers\mixer\wdmaud.drv,Description,,%DeviceName%
+
+HKLM,%MEDIA_CATEGORIES%\%VBCABLE.INPUTGUID1%,Name,,%VBCABLE.INPUTNAME1%
+HKLM,%MEDIA_CATEGORIES%\%VBCABLE.INPUTGUID1%,Display,1,00,00,00,00
+
+HKLM,%MEDIA_CATEGORIES%\%VBCABLE.OUTPUTGUID1%,Name,,%VBCABLE.OUTPUTNAME1%
+HKLM,%MEDIA_CATEGORIES%\%VBCABLE.OUTPUTGUID1%,Display,1,00,00,00,00
+
+HKLM,%MEDIA_CATEGORIES%\%VBCABLE.OUTPUTGUID2%,Name,,%VBCABLE.OUTPUTNAME2%
+HKLM,%MEDIA_CATEGORIES%\%VBCABLE.OUTPUTGUID2%,Display,1,00,00,00,00
+
+
+;======================================================
+; VBCableInst .NTARM64
+;======================================================
+
+[VBCableInst.NTARM64]
+Include=ks.inf,wdmaudio.inf
+Needs=KS.Registration, WDMAUDIO.Registration
+CopyFiles=VBCableInst.NTARM64.CopyList
+AddReg=VBCableInst.NTARM64.AddReg
+
+[VBCableInst.NTARM64.CopyList]
+vbaudio_cable64arm_win10.sys
+
+[VBCableInst.NTARM64.AddReg]
+;HKR,,AssociatedFilters,,"wdmaud,swmidi,redbook"
+HKR,,AssociatedFilters,,"wdmaud,redbook"
+HKR,,Driver,,%DriverFile_ARM64%
+
+
+HKR,Drivers,SubClasses,,"wave,mixer"
+
+HKR,Drivers\wave\wdmaud.drv,Driver,,wdmaud.drv
+;HKR,Drivers\midi\wdmaud.drv,Driver,,wdmaud.drv
+HKR,Drivers\mixer\wdmaud.drv,Driver,,wdmaud.drv
+
+HKR,Drivers\wave\wdmaud.drv,Description,,%DeviceName%
+;HKR,Drivers\midi\wdmaud.drv,Description,,%DeviceName_MIDI%
+HKR,Drivers\mixer\wdmaud.drv,Description,,%DeviceName%
+
+HKLM,%MEDIA_CATEGORIES%\%VBCABLE.INPUTGUID1%,Name,,%VBCABLE.INPUTNAME1%
+HKLM,%MEDIA_CATEGORIES%\%VBCABLE.INPUTGUID1%,Display,1,00,00,00,00
+
+HKLM,%MEDIA_CATEGORIES%\%VBCABLE.OUTPUTGUID1%,Name,,%VBCABLE.OUTPUTNAME1%
+HKLM,%MEDIA_CATEGORIES%\%VBCABLE.OUTPUTGUID1%,Display,1,00,00,00,00
+
+HKLM,%MEDIA_CATEGORIES%\%VBCABLE.OUTPUTGUID2%,Name,,%VBCABLE.OUTPUTNAME2%
+HKLM,%MEDIA_CATEGORIES%\%VBCABLE.OUTPUTGUID2%,Display,1,00,00,00,00
+
+
+
+;======================================================
+; render interfaces:
+;======================================================
+[VBCableInst.I.WaveRender1]
+AddReg=VBCableInst.I.WaveRender1.AddReg
+
+[VBCableInst.I.WaveRender1.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%VBCABLE.NAMELine1%
+
+[VBCableInst.I.TopologyRender1]
+AddReg=VBCableInst.I.TopologyRender1.AddReg, OEMSettingsOverride.AddReg
+
+[VBCableInst.I.TopologyRender1.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%VBCABLE.NAMELine1%
+
+
+
+;======================================================
+; capture interfaces:
+;======================================================
+[VBCableInst.I.WaveCapture1]
+AddReg=VBCableInst.I.WaveCapture1.AddReg
+
+[VBCableInst.I.WaveCapture1.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%VBCABLE.NAMELine1%
+
+
+[VBCableInst.I.TopologyCapture1]
+AddReg=VBCableInst.I.TopologyCapture1.AddReg, OEMSettingsOverride.AddReg
+
+[VBCableInst.I.TopologyCapture1.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%VBCABLE.NAMELine1%
+
+;======================================================
+; VBCableInst .NTamd64
+;======================================================
+
+[VBCableInst.NTamd64.Interfaces]
+;
+; Interfaces for render endpoint.
+;
+
+AddInterface=%KSCATEGORY_AUDIO%, %REFERENCESTRING_WaveRender1%, VBCableInst.I.WaveRender1
+AddInterface=%KSCATEGORY_REALTIME%,%REFERENCESTRING_WaveRender1%, VBCableInst.I.WaveRender1
+AddInterface=%KSCATEGORY_RENDER%, %REFERENCESTRING_WaveRender1%, VBCableInst.I.WaveRender1
+AddInterface=%KSCATEGORY_AUDIO%, %REFERENCESTRING_TopoRender1%, VBCableInst.I.TopologyRender1
+AddInterface=%KSCATEGORY_TOPOLOGY%, %REFERENCESTRING_TopoRender1%, VBCableInst.I.TopologyRender1
+
+;
+; Interfaces for capture endpoint 
+;
+
+AddInterface=%KSCATEGORY_AUDIO%,    %REFERENCESTRING_WaveCapture1%, VBCableInst.I.WaveCapture1
+AddInterface=%KSCATEGORY_REALTIME%, %REFERENCESTRING_WaveCapture1%, VBCableInst.I.WaveCapture1
+AddInterface=%KSCATEGORY_CAPTURE%,  %REFERENCESTRING_WaveCapture1%, VBCableInst.I.WaveCapture1
+AddInterface=%KSCATEGORY_AUDIO%,    %REFERENCESTRING_TopoCapture1%, VBCableInst.I.TopologyCapture1
+AddInterface=%KSCATEGORY_TOPOLOGY%, %REFERENCESTRING_TopoCapture1%, VBCableInst.I.TopologyCapture1
+
+
+;======================================================
+; VBCableInst .NTARM64
+;======================================================
+
+[VBCableInst.NTARM64.Interfaces]
+;
+; Interfaces for render endpoint.
+;
+
+AddInterface=%KSCATEGORY_AUDIO%, %REFERENCESTRING_WaveRender1%, VBCableInst.I.WaveRender1
+AddInterface=%KSCATEGORY_REALTIME%,%REFERENCESTRING_WaveRender1%, VBCableInst.I.WaveRender1
+AddInterface=%KSCATEGORY_RENDER%, %REFERENCESTRING_WaveRender1%, VBCableInst.I.WaveRender1
+AddInterface=%KSCATEGORY_AUDIO%, %REFERENCESTRING_TopoRender1%, VBCableInst.I.TopologyRender1
+AddInterface=%KSCATEGORY_TOPOLOGY%, %REFERENCESTRING_TopoRender1%, VBCableInst.I.TopologyRender1
+
+;
+; Interfaces for capture endpoint 
+;
+
+AddInterface=%KSCATEGORY_AUDIO%,    %REFERENCESTRING_WaveCapture1%, VBCableInst.I.WaveCapture1
+AddInterface=%KSCATEGORY_REALTIME%, %REFERENCESTRING_WaveCapture1%, VBCableInst.I.WaveCapture1
+AddInterface=%KSCATEGORY_CAPTURE%,  %REFERENCESTRING_WaveCapture1%, VBCableInst.I.WaveCapture1
+AddInterface=%KSCATEGORY_AUDIO%,    %REFERENCESTRING_TopoCapture1%, VBCableInst.I.TopologyCapture1
+AddInterface=%KSCATEGORY_TOPOLOGY%, %REFERENCESTRING_TopoCapture1%, VBCableInst.I.TopologyCapture1
+
+
+;======================================================
+; OEM Setting Override - Default Format
+;======================================================
+[OEMSettingsOverride.AddReg]
+HKR,"EP\\0", %PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+;48KHz 24Bits Stereo
+HKR,"EP\\0", %PKEY_AudioEngine_OEMFormat%, %REG_BINARY%, 41,00,00,00,28,00,00,00,FE,FF,02,00,80,bb,00,00,00,65,04,00,06,00,18,00,16,00,18,00,03,00,00,00,01,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+HKR,"EP\\1", %PKEY_AudioEngine_OEMFormat%, %REG_BINARY%, 41,00,00,00,28,00,00,00,FE,FF,02,00,80,bb,00,00,00,65,04,00,06,00,18,00,16,00,18,00,03,00,00,00,01,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+
+
+
+[VBCableInst.NTamd64.Services]
+addService=%ServiceName%,0x00000002,SrvIntSection.NTamd64
+
+
+[SrvIntSection.NTamd64]
+DisplayName=%DeviceName% (WDM)
+ServiceType=%SERVICE_KERNEL_DRIVER%
+StartType=%SERVICE_DEMAND_START%
+ErrorControl=%SERVICE_ERROR_NORMAL%
+ServiceBinary=%13%\%DriverFile_amd64%
+
+
+[VBCableInst.NTARM64.Services]
+addService=%ServiceName%,0x00000002,SrvIntSection.NTARM64
+
+
+[SrvIntSection.NTARM64]
+DisplayName=%DeviceName% (WDM)
+ServiceType=%SERVICE_KERNEL_DRIVER%
+StartType=%SERVICE_DEMAND_START%
+ErrorControl=%SERVICE_ERROR_NORMAL%
+ServiceBinary=%13%\%DriverFile_ARM64%
+
+
+;======================================================
+; WDF
+;======================================================
+[VBCableInst.Wdf]
+KmdfService = VBAudioVACMME, VBCableInst_WdfSect
+
+[VBCableInst_WdfSect]
+KmdfLibraryVersion = 1.15
+
+
+
+;======================================================
+; COMMON
+;======================================================
+
+[Strings]
+ManufacturerName="VB-Audio Software"
+DeviceName="VB-Audio Virtual Cable"
+;DeviceName_MIDI="VB-Audio Virtual Cable - Midi Device"
+HardwareId="VBAudioVACWDM"
+ServiceName="VBAudioVACMME"
+DriverFile_amd64="vbaudio_cable64_win10.sys"
+DriverFile_ARM64="vbaudio_cable64arm_win10.sys"
+DriverFile="vbaudio_cable64_win10.sys"
+DiskName="VB-Audio Disk"
+
+
+PKEY_AudioEndpoint_ControlPanelProvider = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},1"
+PKEY_AudioEndpoint_Association          = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},2"
+PKEY_AudioEngine_OEMFormat              = "{E4870E26-3CC5-4CD2-BA46-CA0A9A70ED04},3"
+;PKEY_AudioEngine_OEMFormat              = "{E4870E26-3CC5-4CD2-BA46-CA0A9A70ED04},0"
+
+;KSNAME_WaveRender="WaveRender"
+;KSNAME_TopologyRender="TopologyRender"
+REFERENCESTRING_WaveRender1="VBAudioVACWDM2022_Out1_Wave_E51A78A01FB100001"
+REFERENCESTRING_TopoRender1="VBAudioVACWDM2022_Out1_Topo_E51A78A01FB100001"
+
+;KSNAME_WaveCapture="WaveCapture"
+;KSNAME_TopologyCapture="TopologyCapture"
+REFERENCESTRING_WaveCapture1="VBAudioVACWDM2022_In1_Wave_E51A78A01FB200001"
+REFERENCESTRING_TopoCapture1="VBAudioVACWDM2022_In1_Topo_E51A78A01FB200001"
+
+
+Proxy.CLSID="{17CCA71B-ECD7-11D0-B908-00A0C9223196}"
+KSCATEGORY_AUDIO="{6994AD04-93EF-11D0-A3CC-00A0C9223196}"
+KSCATEGORY_REALTIME="{EB115FFC-10C8-4964-831D-6DCB02E6F23F}"
+KSCATEGORY_RENDER="{65E8773E-8F56-11D0-A3B9-00A0C9223196}"
+KSCATEGORY_CAPTURE="{65E8773D-8F56-11D0-A3B9-00A0C9223196}"
+KSCATEGORY_TOPOLOGY = "{DDA54A40-1E4C-11D1-A050-405705C10000}"
+
+KSNODETYPE_ANY      = "{00000000-0000-0000-0000-000000000000}"
+KSNODETYPE_SPEAKER  = "{DFF21CE1-F70F-11D0-B917-00A0C9223196}"
+KSNODETYPE_LINE_CONNECTOR  = "{DFF21FE3-F70F-11D0-B917-00A0C9223196}"
+
+REG_BINARY          = 0x00000001
+
+AUDIOENDPOINT_EXT_UI_CLSID = "{6C57B2A2-91F5-4b90-93D5-FAB82485ECA6}"
+
+SERVICE_KERNEL_DRIVER = 1
+SERVICE_DEMAND_START  = 3
+SERVICE_ERROR_NORMAL  = 1
+
+
+;; FriendlyName
+VBCABLE.INPUTGUID1 = "{B961F7FC-8C2D-4378-9DA3-5A3A89511B74}"
+VBCABLE.OUTPUTGUID1 = "{B961F7FD-8C2D-4378-9DA3-5A3A89511B74}"
+VBCABLE.OUTPUTGUID2 = "{B961F7FD-8C2D-4378-9DA3-5A3A89511B75}"
+
+
+VBCABLE.NAMELine1  = "VB-Audio Point"
+VBCABLE.INPUTNAME1  = "CABLE Output"
+VBCABLE.OUTPUTNAME1 = "CABLE Input"
+VBCABLE.OUTPUTNAME2 = "CABLE In 16 Ch"
+
+
+MEDIA_CATEGORIES = "SYSTEM\CurrentControlSet\Control\MediaCategories"
